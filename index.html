@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checklist Dokumen Divisi IT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .progress-bar-bg {
+            background-color: #e9ecef;
+        }
+        .progress-bar-fg {
+            background-color: #28a745;
+            transition: width 0.3s ease-in-out;
+        }
+        .accordion-header {
+            cursor: pointer;
+            transition: background-color: 0.2s;
+        }
+        .accordion-header:hover {
+            background-color: #f1f5f9;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .accordion-open .accordion-content {
+            max-height: 1000px; /* Adjust as needed */
+        }
+        .accordion-open .chevron {
+            transform: rotate(180deg);
+        }
+        .chevron {
+            transition: transform 0.3s;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .attachment-icon {
+            color: #9ca3af; /* gray-400 */
+            cursor: pointer;
+            transition: color 0.2s;
+            padding: 0.5rem;
+        }
+        .attachment-icon:hover {
+            color: #3b82f6; /* blue-500 */
+        }
+        .attachment-icon.has-attachment {
+            color: #3b82f6; /* blue-500 */
+        }
+        .attachment-icon.has-attachment:hover {
+            color: #2563eb; /* blue-600 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-75 flex flex-col justify-center items-center z-50">
+        <div class="loader"></div>
+        <p class="mt-4 text-lg font-semibold text-gray-700">Memuat data checklist...</p>
+    </div>
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="bg-white p-6 rounded-xl shadow-md mb-8">
+            <div class="flex items-center space-x-4">
+                <div class="bg-blue-500 p-3 rounded-full">
+                    <i class="fas fa-tasks text-white text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Checklist Kelengkapan Dokumen</h1>
+                    <p class="text-gray-500">Divisi Teknologi Informasi</p>
+                </div>
+            </div>
+            <div class="mt-6">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-sm font-medium text-gray-700">Progress Keseluruhan</span>
+                    <span id="overall-progress-text" class="text-sm font-bold text-blue-600">0%</span>
+                </div>
+                <div class="w-full progress-bar-bg rounded-full h-4">
+                    <div id="overall-progress-bar" class="progress-bar-fg h-4 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </header>
+
+        <main id="sop-list" class="space-y-4">
+            <!-- SOP Accordions will be injected here by JavaScript -->
+        </main>
+
+        <footer class="text-center mt-12 text-gray-500 text-sm">
+            <p>&copy; 2025 Divisi IT. Aplikasi Checklist Dokumen.</p>
+        </footer>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- KONFIGURASI DAN DATA ---
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'it-checklist-app';
+        let firebaseConfig;
+        try {
+            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        } catch (e) {
+            console.error("Firebase config is not valid JSON:", e);
+            firebaseConfig = null;
+        }
+
+        const initialSopData = [
+            { id: 'sop-01', title: 'SOP-IT-001: Pengelolaan Review Hak Akses User', waktu: '6 bulan sekali', documents: [{name:'Daftar User Terupdate'}, {name:'Review Hak Akses'}, {name:'User Access Matrix'}] },
+            { id: 'sop-02', title: 'SOP-IT-002: Pengaktifan, Penonaktifan, dan Perubahan Hak Akses', waktu: 'Sesuai kebutuhan (berdasarkan permintaan)', documents: [{name:'Daftar User Terupdate'}, {name:'Form Penambahan Hak Akses User Baru'}, {name:'Form Penonaktifan Hak Akses User'}, {name:'Form/Email Perubahan Hak Akses User'}, {name:'Form Penambahan Hak Akses User Lama'}] },
+            { id: 'sop-03', title: 'SOP-IT-003: Pengelolaan Review Hak Akses Super User / Administrator (Aplikasi)', waktu: '6 bulan sekali', documents: [{name:'Daftar User Terupdate'}, {name:'Review Hak Akses'}, {name:'User Access Matrix'}] },
+            { id: 'sop-04', title: 'SOP-IT-004: Pengelolaan Review Hak Akses Super User / Administrator (Infrastruktur)', waktu: 'Setiap Hari', documents: [{name:'Daftar User Terupdate'}, {name:'Review Hak Akses'}, {name:'User Access Matrix'}] },
+            { id: 'sop-05', title: 'SOP-IT-005: Pengelolaan Review Aktivitas Super User / Administrator (Aplikasi)', waktu: '6 bulan sekali', documents: [{name:'Daftar User Terupdate'}, {name:'Review Hak Akses'}, {name:'User Access Matrix'}, {name:'Audit Trail Aplikasi'}] },
+            { id: 'sop-06', title: 'SOP-IT-006: Pengelolaan Review Aktivitas Super User / Administrator (Infrastruktur)', waktu: 'Setiap Hari', documents: [{name:'Daftar User Terupdate'}, {name:'Review Hak Akses'}, {name:'User Access Matrix'}, {name:'Audit Trail PAM'}] },
+            { id: 'sop-07', title: 'SOP-IT-007: Pengelolaan Program dan Proyek TI', waktu: 'Sesuai timeline', documents: [{name:'BAST'}, {name:'Closing Report'}, {name:'Laporan Status Proyek'}, {name:'Project Charter'}] },
+            { id: 'sop-08', title: 'SOP-IT-008: Pengelolaan Tingkat Layanan TI', waktu: 'Setiap tahun atau bila ada penambahan / revisi', documents: [{name:'Ketentuan SLA'}, {name:'SLR'}, {name:'SLT'}, {name:'Service Catalog'}, {name:'Laporan Pencapaian SLA'}] },
+            { id: 'sop-09', title: 'SOP-IT-009: Pengelolaan Pengembangan Layanan TI', waktu: 'Sesuai kebutuhan (berdasarkan permintaan)', documents: [{name:'BRD'}, {name:'SAD'}] },
+            { id: 'sop-10', title: 'SOP-IT-010: Pengelolaan Perubahan Layanan TI', waktu: 'Sesuai kebutuhan (berdasarkan permintaan)', documents: [{name:'Change Log'}, {name:'Change Plan'}, {name:'Change Request Form'}] },
+            { id: 'sop-11', title: 'SOP-IT-011: Pengelolaan Insiden dan Permintaan Layanan TI', waktu: 'Sesuai kebutuhan (berdasarkan permintaan)', documents: [{name:'Tiket Insiden dan Permintaan Layanan'}] },
+            { id: 'sop-12', title: 'SOP-IT-012: Pengelolaan Back Up TI', waktu: 'Setiap Hari', documents: [{name:'Form Backup IT'}, {name:'Backup Log History'}] },
+            { id: 'sop-13', title: 'SOP-IT-013: Pengelolaan Restore TI', waktu: '1 bulan sekali', documents: [{name:'Form Restore'}, {name:'Restore Log History'}] },
+            { id: 'sop-14', title: 'SOP-IT-014: Pengelolaan Penjaminan Mutu TI', waktu: 'Jika ada perubahan / pengembangan layanan TI', documents: [{name:'Test Case'}, {name:'Test Plan'}, {name:'Defect Tracking'}, {name:'RTM'}, {name:'Formulir PIR'}, {name:'Laporan Hasil Pengujian'}] },
+            { id: 'sop-15', title: 'SOP-IT-015: Pengelolaan Release & Deployment', waktu: 'Jika ada pengembangan / perubahan layanan TI', documents: [{name:'Release Plan'}] },
+            { id: 'sop-16', title: 'SOP-IT-016: Pengelolaan Problem Layanan TI', waktu: 'Jika ada insiden berulang / temuan problem layanan TI', documents: [{name:'Problem Record'}] },
+            { id: 'sop-17', title: 'SOP-IT-017: Pengelolaan Konfigurasi Layanan TI', waktu: 'Jika ada pengembangan / perubahan layanan TI', documents: [{name:'CMDB'}, {name:'Summary Review Konfigurasi'}] },
+            { id: 'sop-18', title: 'SOP-IT-018: Pengelolaan Ketersediaan dan Kapasitas Layanan TI', waktu: 'Setiap Hari', documents: [{name:'Laporan Capacity Plan'}] },
+            { id: 'sop-19', title: 'SOP-IT-019: Pengelolaan Enterprise Architecture', waktu: 'Setiap Tahun', documents: [{name:'Application Architecture'}, {name:'Infrastructure Architecture'}] },
+            { id: 'sop-20', title: 'SOP-IT-020: Pengelolaan Pengetahuan TI', waktu: 'Sesuai kebutuhan (berdasarkan permintaan)', documents: [{name:'Form Rencana Pelatihan'}] },
+            { id: 'sop-21', title: 'SOP-IT-021: Pengelolaan Kelangsungan TI', waktu: 'Setiap Tahun', documents: [{name:'DRP'}, {name:'Form BIA'}, {name:'Form Hasil Pengujian DRP'}] },
+            { id: 'sop-22', title: 'SOP-IT-022: Pengelolaan Keamanan TI', waktu: 'Internal/External Security Testing', documents: [{name:'Kebijakan Keamanan TI'}, {name:'Form Scoping Security Testing'}, {name:'Laporan Vulnerability Assessment'}, {name:'Laporan Perbaikan Security Testing'}] },
+            { id: 'sop-23', title: 'SOP-IT-023: Pengelolaan Kepatuhan TI', waktu: 'Setiap tahun / perubahan regulasi', documents: [{name:'Daftar Tindak Lanjut'}, {name:'Laporan Hasil Tindak Lanjut'}] },
+            { id: 'sop-24', title: 'SOP-IT-024: Pengelolaan Risiko TI', waktu: 'Setiap tahun / perubahan signifikan', documents: [{name:'Risk Register'}, {name:'Update Data Downtime'}] },
+            { id: 'sop-25', title: 'SOP-IT-025: Pengelolaan Aset TI', waktu: 'Setiap Hari', documents: [{name:'Form Aset TI'}] },
+            { id: 'sop-26', title: 'SOP-IT-026: Pengelolaan Data Center dan Disaster Recovery Center', waktu: 'Setiap Hari', documents: [{name:'Laporan Checklist Monitoring Harian'}, {name:'Laporan Bulanan'}] },
+            { id: 'sop-27', title: 'SOP-IT-027: Pengelolaan Monitoring Izin Masuk Ruang Data Center', waktu: 'Setiap hari', documents: [{name:'Log Izin Masuk Ruang Data Center'}] }
+        ].map(sop => ({
+            ...sop,
+            documents: sop.documents.map((doc, index) => ({ 
+                id: index + 1, 
+                name: doc.name, 
+                checked: false, 
+                attachment: '' 
+            }))
+        }));
+
+
+        // --- VARIABEL GLOBAL ---
+        let state = { sopData: [] };
+        let db, auth;
+        let userId = null;
+        let unsubscribe = null;
+
+        // --- ELEMEN DOM ---
+        const sopListContainer = document.getElementById('sop-list');
+        const overallProgressBar = document.getElementById('overall-progress-bar');
+        const overallProgressText = document.getElementById('overall-progress-text');
+        const loadingOverlay = document.getElementById('loading-overlay');
+
+        // --- FUNGSI-FUNGSI ---
+
+        function renderSOPs() {
+            sopListContainer.innerHTML = '';
+            if (!state.sopData || state.sopData.length === 0) {
+                sopListContainer.innerHTML = `<div class="bg-white p-6 rounded-lg shadow-sm text-center text-gray-500"><p>Tidak ada data SOP.</p></div>`;
+                return;
+            }
+
+            state.sopData.forEach(sop => {
+                const sopProgress = calculateSOPProgress(sop);
+                const accordion = document.createElement('div');
+                accordion.className = 'bg-white rounded-xl shadow-sm overflow-hidden sop-accordion';
+                accordion.dataset.sopId = sop.id;
+
+                let documentsHtml = sop.documents.map(doc => `
+                    <li class="flex items-center justify-between p-3 border-t border-gray-200">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="doc-${sop.id}-${doc.id}" data-sop-id="${sop.id}" data-doc-id="${doc.id}" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" ${doc.checked ? 'checked' : ''}>
+                            <label for="doc-${sop.id}-${doc.id}" class="ml-3 text-sm text-gray-700">${doc.name}</label>
+                        </div>
+                        <i class="fas fa-paperclip attachment-icon ${doc.attachment ? 'has-attachment' : ''}" 
+                           data-sop-id="${sop.id}" 
+                           data-doc-id="${doc.id}"
+                           title="${doc.attachment ? 'Buka lampiran. Tahan Alt+Klik untuk edit.' : 'Tambahkan lampiran'}"></i>
+                    </li>
+                `).join('');
+                
+                if (sop.documents.length === 0) {
+                    documentsHtml = `<li class="p-3 border-t border-gray-200 text-sm text-gray-500 italic">Tidak ada dokumen untuk SOP ini.</li>`;
+                }
+
+                accordion.innerHTML = `
+                    <div class="accordion-header p-4 flex justify-between items-center">
+                        <div class="flex-1 mr-4">
+                            <p class="font-bold text-gray-800">${sop.title}</p>
+                            <div class="mt-2 flex items-center text-xs text-gray-500">
+                                <i class="far fa-calendar-alt mr-2"></i>
+                                <span>${sop.waktu || 'Waktu tidak ditentukan'}</span>
+                            </div>
+                            <div class="mt-3">
+                                <div class="w-full progress-bar-bg rounded-full h-2.5">
+                                    <div class="progress-bar-fg h-2.5 rounded-full" style="width: ${sopProgress}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                           <span class="text-sm font-semibold text-gray-600">${sopProgress}%</span>
+                           <i class="fas fa-chevron-down chevron text-gray-500"></i>
+                        </div>
+                    </div>
+                    <div class="accordion-content">
+                        <ul class="bg-gray-50">${documentsHtml}</ul>
+                    </div>
+                `;
+                sopListContainer.appendChild(accordion);
+            });
+            addEventListeners();
+            updateOverallProgress();
+        }
+        
+        function calculateSOPProgress(sop) {
+            if (sop.documents.length === 0) return 100;
+            const checkedDocs = sop.documents.filter(d => d.checked).length;
+            return Math.round((checkedDocs / sop.documents.length) * 100);
+        }
+
+        function updateOverallProgress() {
+            const allDocs = state.sopData.flatMap(sop => sop.documents);
+            if (allDocs.length === 0) {
+                overallProgressBar.style.width = '100%';
+                overallProgressText.textContent = '100%';
+                return;
+            }
+            const checkedDocs = allDocs.filter(d => d.checked).length;
+            const percentage = Math.round((checkedDocs / allDocs.length) * 100);
+
+            overallProgressBar.style.width = `${percentage}%`;
+            overallProgressText.textContent = `${percentage}%`;
+        }
+        
+        function addEventListeners() {
+            sopListContainer.querySelectorAll('.accordion-header').forEach(header => {
+                header.addEventListener('click', () => header.parentElement.classList.toggle('accordion-open'));
+            });
+
+            sopListContainer.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.addEventListener('change', handleCheckboxChange);
+            });
+            
+            sopListContainer.querySelectorAll('.attachment-icon').forEach(icon => {
+                icon.addEventListener('click', handleAttachmentClick);
+            });
+        }
+        
+        async function handleCheckboxChange(event) {
+            const { sopId, docId } = event.target.dataset;
+            const sop = state.sopData.find(s => s.id === sopId);
+            const doc = sop?.documents.find(d => d.id == docId);
+            if (doc) {
+                doc.checked = event.target.checked;
+                const sopAccordion = document.querySelector(`.sop-accordion[data-sop-id="${sopId}"]`);
+                const sopProgress = calculateSOPProgress(sop);
+                sopAccordion.querySelector('.progress-bar-fg').style.width = `${sopProgress}%`;
+                sopAccordion.querySelector('.font-semibold').textContent = `${sopProgress}%`;
+                updateOverallProgress();
+                await saveData();
+            }
+        }
+        
+        async function handleAttachmentClick(event) {
+            const { sopId, docId } = event.currentTarget.dataset;
+            const sop = state.sopData.find(s => s.id === sopId);
+            const doc = sop?.documents.find(d => d.id == docId);
+
+            if (!doc) return;
+
+            const hasAttachment = doc.attachment && doc.attachment.trim() !== '';
+
+            // If it has an attachment and Alt key is NOT pressed, open the link.
+            if (hasAttachment && !event.altKey) {
+                window.open(doc.attachment, '_blank');
+                return;
+            }
+
+            // Otherwise, prompt to edit/add.
+            const message = hasAttachment 
+                ? "Edit URL lampiran:"
+                : "Masukkan URL lampiran:";
+            const newUrl = prompt(message, doc.attachment || '');
+
+            // `prompt` returns null if user cancels.
+            if (newUrl !== null) {
+                doc.attachment = newUrl.trim();
+                await saveData();
+                // Update UI directly
+                event.currentTarget.classList.toggle('has-attachment', doc.attachment !== '');
+                event.currentTarget.title = doc.attachment ? 'Buka lampiran. Tahan Alt+Klik untuk edit.' : 'Tambahkan lampiran';
+            }
+        }
+
+
+        async function saveData() {
+            if (!db || !userId) return;
+            try {
+                const docRef = doc(db, `artifacts/${appId}/users/${userId}/it_checklist/data`);
+                await setDoc(docRef, { sopData: state.sopData });
+            } catch (error) {
+                console.error("Error saving data to Firestore: ", error);
+            }
+        }
+        
+        function migrateData(data) {
+            // Check if migration is needed. If a document doesn't have 'attachment', it's old data.
+            const needsMigration = data.some(sop => sop.documents.length > 0 && !sop.documents[0].hasOwnProperty('attachment'));
+            if (needsMigration) {
+                console.log("Migrating old data structure.");
+                return initialSopData; // Return fresh structure, user can re-check items.
+            }
+            return data;
+        }
+
+        function initializeAppData(data) {
+            state.sopData = data;
+            renderSOPs();
+            loadingOverlay.style.display = 'none';
+        }
+
+        // --- INISIALISASI ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!firebaseConfig) {
+                console.warn("Firebase config not available. Running in offline mode.");
+                initializeAppData(initialSopData);
+                return;
+            }
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        if (unsubscribe) unsubscribe(); 
+                        
+                        const docRef = doc(db, `artifacts/${appId}/users/${userId}/it_checklist/data`);
+                        
+                        unsubscribe = onSnapshot(docRef, (docSnap) => {
+                            if (docSnap.exists()) {
+                                let firestoreData = docSnap.data().sopData;
+                                let migratedData = migrateData(firestoreData);
+                                initializeAppData(migratedData);
+                                // If data was migrated, save the new structure back to Firestore.
+                                if (migratedData !== firestoreData) {
+                                    saveData();
+                                }
+                            } else {
+                                console.log("No checklist found for user, creating one.");
+                                initializeAppData(initialSopData);
+                                saveData();
+                            }
+                        }, (error) => {
+                           console.error("Error with onSnapshot listener:", error);
+                           initializeAppData(initialSopData);
+                        });
+
+                    } else {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                initializeAppData(initialSopData);
+            }
+        });
+    </script>
+</body>
+</html>
+
