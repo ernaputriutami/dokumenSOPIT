@@ -111,6 +111,7 @@
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- KONFIGURASI DAN DATA ---
+        const DATA_VERSION = '1.1'; // Versi data untuk mendeteksi pembaruan
         const LOCAL_STORAGE_KEY = 'itChecklistData';
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'it-checklist-app';
         let firebaseConfig;
@@ -292,20 +293,33 @@
 
         function saveDataToLocal() {
             try {
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state.sopData));
-                console.log("Data berhasil disimpan ke penyimpanan lokal browser.");
+                const dataToSave = {
+                    version: DATA_VERSION,
+                    sopData: state.sopData
+                };
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
+                console.log("Data berhasil disimpan ke penyimpanan lokal browser (versi: " + DATA_VERSION + ").");
             } catch (e) {
                 console.error("Gagal menyimpan ke penyimpanan lokal:", e);
             }
         }
 
         function loadDataFromLocal() {
-            const localData = localStorage.getItem(LOCAL_STORAGE_KEY);
-            if (localData) {
-                console.log("Data ditemukan di penyimpanan lokal, memuat...");
-                return JSON.parse(localData);
+            const localDataString = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (localDataString) {
+                try {
+                    const localData = JSON.parse(localDataString);
+                    if (localData.version === DATA_VERSION) {
+                        console.log("Data (versi " + localData.version + ") ditemukan di penyimpanan lokal, memuat...");
+                        return localData.sopData;
+                    } else {
+                        console.warn("Versi data lokal (" + (localData.version || 'lama') + ") tidak cocok dengan versi kode (" + DATA_VERSION + "). Memuat data baru.");
+                    }
+                } catch (e) {
+                     console.error("Gagal mem-parsing data lokal, memuat data baru.", e);
+                }
             }
-            console.log("Tidak ada data di penyimpanan lokal, menggunakan data awal.");
+            console.log("Tidak ada data valid di penyimpanan lokal, menggunakan data awal.");
             return initialSopData;
         }
 
