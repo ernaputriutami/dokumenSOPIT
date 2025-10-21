@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Checklist Dokumen Divisi IT</title>
+    <title>Checklist & RKAP Dokumen Divisi IT</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -65,43 +66,187 @@
         .attachment-icon.has-attachment:hover {
             color: #2563eb; /* blue-600 */
         }
+        .tab-button.active {
+            color: #2563eb; /* blue-600 */
+            border-bottom: 2px solid #2563eb;
+        }
+        .tab-button {
+             border-bottom: 2px solid transparent;
+        }
+        .delete-icon {
+            color: #9ca3af;
+            transition: color 0.2s ease-in-out;
+        }
+        .delete-icon:hover {
+            color: #ef4444; /* red-500 */
+        }
+        /* Modal Styles */
+        .modal-overlay {
+            transition: opacity 0.2s ease-in-out;
+        }
+        .modal-container {
+            transition: transform 0.2s ease-in-out, opacity 0.2s ease-in-out;
+        }
+        /* Custom Multiselect */
+        .multiselect-options {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .sop-link-tag {
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
 
     <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-75 flex flex-col justify-center items-center z-50">
         <div class="loader"></div>
-        <p class="mt-4 text-lg font-semibold text-gray-700">Memuat data checklist...</p>
+        <p class="mt-4 text-lg font-semibold text-gray-700">Memuat data...</p>
+    </div>
+    
+    <!-- Modal Dialog -->
+    <div id="modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 modal-overlay opacity-0 pointer-events-none">
+        <div id="modal-container" class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 modal-container transform scale-95 opacity-0">
+            <h2 id="modal-title" class="text-2xl font-bold mb-4"></h2>
+            <div id="modal-body"></div>
+            <div id="modal-footer" class="mt-6 flex justify-end space-x-3"></div>
+        </div>
     </div>
 
-    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
         <header class="bg-white p-6 rounded-xl shadow-md mb-8">
             <div class="flex items-center space-x-4">
                 <div class="bg-blue-500 p-3 rounded-full">
                     <i class="fas fa-tasks text-white text-2xl"></i>
                 </div>
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-900">Checklist Kelengkapan Dokumen</h1>
-                    <p class="text-gray-500">Divisi Teknologi Informasi</p>
+                    <h1 class="text-3xl font-bold text-gray-900">Dokumentasi Divisi IT</h1>
+                    <p class="text-gray-500">Dashboard, Checklist SOP & Rencana Kerja Anggaran Perusahaan (RKAP)</p>
                 </div>
             </div>
-            <div class="mt-6">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-sm font-medium text-gray-700">Progress Keseluruhan</span>
-                    <span id="overall-progress-text" class="text-sm font-bold text-blue-600">0%</span>
+
+            <!-- Navigasi Tab -->
+            <nav class="mt-6 border-b border-gray-200">
+                <div class="flex space-x-1">
+                    <button id="tab-dashboard" class="tab-button active py-3 px-4 font-semibold text-sm">Dashboard</button>
+                    <button id="tab-sop" class="tab-button py-3 px-4 font-semibold text-gray-500 hover:text-gray-700 text-sm">SOP Checklist</button>
+                    <button id="tab-rkap" class="tab-button py-3 px-4 font-semibold text-gray-500 hover:text-gray-700 text-sm">RKAP</button>
                 </div>
-                <div class="w-full progress-bar-bg rounded-full h-4">
-                    <div id="overall-progress-bar" class="progress-bar-fg h-4 rounded-full" style="width: 0%"></div>
-                </div>
-            </div>
+            </nav>
         </header>
 
-        <main id="sop-list" class="space-y-4">
-            <!-- SOP Accordions will be injected here by JavaScript -->
-        </main>
+        <!-- Konten Halaman Dashboard -->
+        <div id="dashboard-page">
+            <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex justify-end items-center">
+                 <div class="flex items-center space-x-4">
+                    <label for="dashboard-year-filter" class="font-semibold text-sm">Filter Tahun RKAP:</label>
+                    <select id="dashboard-year-filter" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></select>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                <!-- Stat Cards -->
+                <div class="bg-white p-6 rounded-xl shadow-sm flex items-center space-x-4">
+                    <div class="bg-blue-100 p-3 rounded-full"><i class="fas fa-file-alt text-xl text-blue-500"></i></div>
+                    <div>
+                        <p class="text-gray-500 text-sm">Total SOP</p>
+                        <p id="stat-total-sop" class="text-2xl font-bold">0</p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm flex items-center space-x-4">
+                    <div class="bg-green-100 p-3 rounded-full"><i class="fas fa-tasks text-xl text-green-500"></i></div>
+                    <div>
+                        <p id="stat-rkap-year-label" class="text-gray-500 text-sm">Program RKAP (2025)</p>
+                        <p id="stat-total-rkap" class="text-2xl font-bold">0</p>
+                    </div>
+                </div>
+                 <div class="bg-white p-6 rounded-xl shadow-sm flex items-center space-x-4">
+                    <div class="bg-yellow-100 p-3 rounded-full"><i class="fas fa-percent text-xl text-yellow-500"></i></div>
+                    <div>
+                        <p class="text-gray-500 text-sm">Progress SOP</p>
+                        <p id="stat-sop-progress" class="text-2xl font-bold">0%</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <!-- Main Content (Charts) -->
+                <div class="lg:col-span-3 space-y-6">
+                     <div class="bg-white p-6 rounded-xl shadow-sm">
+                        <h3 class="font-bold text-lg mb-4">Anggaran RKAP (<span id="budget-chart-year">2025</span>)</h3>
+                        <canvas id="budgetChart"></canvas>
+                    </div>
+                </div>
+                <!-- Sidebar (Donut chart & Lists) -->
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm">
+                        <h3 class="font-bold text-lg mb-4 text-center">Kelengkapan Dokumen SOP</h3>
+                        <div class="max-w-[200px] mx-auto">
+                           <canvas id="sopProgressChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm">
+                        <h3 class="font-bold text-lg mb-4">Program RKAP Mendatang</h3>
+                        <ul id="upcoming-rkap-list" class="space-y-3 text-sm">
+                           <!-- Diisi oleh JS -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Konten Halaman SOP -->
+        <div id="sop-page" class="hidden">
+             <div id="sop-filter-container" class="hidden mb-4 bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg relative flex justify-between items-center" role="alert">
+                <span id="sop-filter-text" class="block sm:inline"></span>
+                <button id="clear-sop-filter-btn" class="font-bold py-1 px-2 rounded-md hover:bg-blue-100">
+                    <span>&times;</span> Tampilkan Semua
+                </button>
+            </div>
+            <div class="mb-4 flex flex-wrap gap-4 items-center">
+                 <div class="flex-grow relative">
+                    <input type="search" id="sop-search-input" placeholder="Cari SOP..." class="w-full p-2 pl-10 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                </div>
+                <button id="add-sop-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow transition-transform transform hover:scale-105">
+                    <i class="fas fa-plus mr-2"></i>Tambah SOP
+                </button>
+             </div>
+             <div class="flex justify-between items-center mb-4">
+                <span class="text-sm font-medium text-gray-700">Progress Kelengkapan SOP</span>
+                <span id="overall-progress-text" class="text-sm font-bold text-blue-600">0%</span>
+            </div>
+            <div class="w-full progress-bar-bg rounded-full h-4 mb-6">
+                <div id="overall-progress-bar" class="progress-bar-fg h-4 rounded-full" style="width: 0%"></div>
+            </div>
+            <main id="sop-list" class="space-y-4">
+                <!-- SOP Accordions will be injected here by JavaScript -->
+            </main>
+        </div>
+
+        <!-- Konten Halaman RKAP -->
+        <div id="rkap-page" class="hidden">
+            <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-wrap gap-4 justify-between items-center">
+                <div class="flex items-center space-x-4">
+                    <label for="rkap-year-selector" class="font-semibold">Tahun RKAP:</label>
+                    <select id="rkap-year-selector" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></select>
+                </div>
+                 <div class="flex-grow md:flex-grow-0 md:w-1/3 relative">
+                    <input type="search" id="rkap-search-input" placeholder="Cari RKAP..." class="w-full p-2 pl-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                </div>
+                <button id="add-rkap-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow transition-transform transform hover:scale-105">
+                    <i class="fas fa-plus mr-2"></i>Tambah RKAP
+                </button>
+            </div>
+            <main id="rkap-list" class="space-y-4">
+                <!-- RKAP items will be injected here -->
+            </main>
+        </div>
 
         <footer class="text-center mt-12 text-gray-500 text-sm">
-            <p>&copy; 2025 Divisi IT. Aplikasi Checklist Dokumen.</p>
+            <p>&copy; 2025 Divisi IT. Aplikasi Checklist & RKAP.</p>
         </footer>
     </div>
 
@@ -111,9 +256,9 @@
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- KONFIGURASI DAN DATA ---
-        const DATA_VERSION = '1.1'; // Versi data untuk mendeteksi pembaruan
-        const LOCAL_STORAGE_KEY = 'itChecklistData';
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'it-checklist-app';
+        const DATA_VERSION = '2.3'; // Versi data untuk mendeteksi pembaruan
+        const LOCAL_STORAGE_KEY = 'itChecklistRkapData';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'it-checklist-rkap-app';
         let firebaseConfig;
         try {
             firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -122,8 +267,8 @@
             firebaseConfig = null;
         }
 
-        const initialSopData = [
-            { id: 'sop-01', title: 'SOP-IT-001: Pengelolaan Review Hak Akses User', waktu: '6 bulan sekali', documents: [{name:'Daftar User Terupdate'}, {name:'Review Hak Akses'}, {name:'User Access Matrix'}] },
+       const initialSopData = [
+             { id: 'sop-01', title: 'SOP-IT-001: Pengelolaan Review Hak Akses User', waktu: '6 bulan sekali', documents: [{name:'Daftar User Terupdate'}, {name:'Review Hak Akses'}, {name:'User Access Matrix'}] },
             { id: 'sop-02', title: 'SOP-IT-002: Pengaktifan, Penonaktifan, dan Perubahan Hak Akses', waktu: 'Sesuai kebutuhan (berdasarkan permintaan)', documents: [{name:'Daftar User Terupdate'}, {name:'Form Penambahan Hak Akses User Baru'}, {name:'Form Penonaktifan Hak Akses User'}, {name:'Form/Email Perubahan Hak Akses User'}, {name:'Form Penambahan Hak Akses User Lama'}] },
             { id: 'sop-03', title: 'SOP-IT-003: Pengelolaan Review Hak Akses Super User / Administrator (Aplikasi)', waktu: '6 bulan sekali', documents: [{name:'Daftar User Terupdate'}, {name:'Review Hak Akses'}, {name:'User Access Matrix'}] },
             { id: 'sop-04', title: 'SOP-IT-004: Pengelolaan Review Hak Akses Super User / Administrator (Infrastruktur)', waktu: 'Setiap Hari', documents: [{name:'Daftar User Terupdate'}, {name:'Review Hak Akses'}, {name:'User Access Matrix'}] },
@@ -152,45 +297,238 @@
             { id: 'sop-27', title: 'SOP-IT-027: Pengelolaan Monitoring Izin Masuk Ruang Data Center', waktu: 'Setiap hari', documents: [{name:'Log Izin Masuk Ruang Data Center'}] }
         ].map(sop => ({
             ...sop,
-            documents: sop.documents.map((doc, index) => ({ id: index + 1, name: doc.name, checked: false, attachment: '' }))
+            documents: sop.documents.map((doc, index) => ({ id: `${sop.id}-doc-${Date.now()}-${index}`, name: doc.name, checked: false, attachment: '' }))
         }));
 
+        const initialRkapData = [
+             { id: 'rkap-1667826000000', year: 2026, title: 'Peremajaan Laptop', targetDate: '', relatedSop: [], estimasiAnggaran: 0, realisasiAnggaran: 0 },
+             { id: 'rkap-1667826000001', year: 2026, title: 'Pengembangan Aplikasi Core and Support System', targetDate: '', relatedSop: [], estimasiAnggaran: 0, realisasiAnggaran: 0 },
+             { id: 'rkap-1667826000002', year: 2026, title: 'Pengembangan Aplikasi ERM', targetDate: '', relatedSop: [], estimasiAnggaran: 0, realisasiAnggaran: 0 },
+        ];
+        
         // --- VARIABEL GLOBAL ---
-        let state = { sopData: [] };
+        let state = { sopData: [], rkapData: [] };
         let db, auth;
         let userId = null;
         let unsubscribe = null;
         let isOnlineMode = false;
+        let currentRkapYear;
+        let sopFilterId = null;
+        let sopSearchTerm = '';
+        let rkapSearchTerm = '';
+        let sopProgressChart, budgetChart;
+        let dashboardFilterYear = 'all';
 
         // --- ELEMEN DOM ---
         const sopListContainer = document.getElementById('sop-list');
+        const rkapListContainer = document.getElementById('rkap-list');
         const overallProgressBar = document.getElementById('overall-progress-bar');
         const overallProgressText = document.getElementById('overall-progress-text');
         const loadingOverlay = document.getElementById('loading-overlay');
+        const tabDashboard = document.getElementById('tab-dashboard');
+        const tabSop = document.getElementById('tab-sop');
+        const tabRkap = document.getElementById('tab-rkap');
+        const dashboardPage = document.getElementById('dashboard-page');
+        const sopPage = document.getElementById('sop-page');
+        const rkapPage = document.getElementById('rkap-page');
+        const rkapYearSelector = document.getElementById('rkap-year-selector');
+        const dashboardYearFilter = document.getElementById('dashboard-year-filter');
+        const addRkapBtn = document.getElementById('add-rkap-btn');
+        const addSopBtn = document.getElementById('add-sop-btn');
+        const modal = document.getElementById('modal');
+        const modalContainer = document.querySelector('.modal-container');
+        const sopFilterContainer = document.getElementById('sop-filter-container');
+        const sopFilterText = document.getElementById('sop-filter-text');
+        const clearSopFilterBtn = document.getElementById('clear-sop-filter-btn');
+        const sopSearchInput = document.getElementById('sop-search-input');
+        const rkapSearchInput = document.getElementById('rkap-search-input');
 
-        // --- FUNGSI-FUNGSI ---
+        // --- FUNGSI HELPER ---
+        function formatCurrency(value) {
+            if (isNaN(value)) return '0';
+            return new Intl.NumberFormat('id-ID').format(value);
+        }
+
+        function parseCurrency(value) {
+            return Number(String(value).replace(/[^0-9]/g, ''));
+        }
+
+        // --- FUNGSI MODAL ---
+        function showModal(config) {
+            document.getElementById('modal-title').textContent = config.title;
+            document.getElementById('modal-body').innerHTML = config.body;
+            const footer = document.getElementById('modal-footer');
+            footer.innerHTML = '';
+            config.buttons.forEach(btnConfig => {
+                const button = document.createElement('button');
+                button.textContent = btnConfig.label;
+                button.className = btnConfig.classes;
+                button.onclick = () => {
+                    if(btnConfig.onClick) btnConfig.onClick();
+                    hideModal();
+                };
+                footer.appendChild(button);
+            });
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modalContainer.classList.remove('scale-95', 'opacity-0');
+        }
+
+        function hideModal() {
+            modal.classList.add('opacity-0');
+            modalContainer.classList.add('opacity-0', 'scale-95');
+            setTimeout(() => modal.classList.add('pointer-events-none'), 200);
+        }
+
+        // --- FUNGSI-FUNGSI RENDER ---
+        function renderAll() {
+            renderDashboard();
+            renderSOPs();
+            renderRKAPs();
+        }
+
+        function renderDashboard() {
+            let rkapDataForDashboard = state.rkapData;
+            const yearLabel = dashboardFilterYear === 'all' ? 'Semua Tahun' : dashboardFilterYear;
+
+            if (dashboardFilterYear !== 'all') {
+                rkapDataForDashboard = state.rkapData.filter(r => r.year == dashboardFilterYear);
+            }
+
+            // Stat Cards
+            document.getElementById('stat-total-sop').textContent = state.sopData.length;
+            document.getElementById('stat-rkap-year-label').textContent = `Program RKAP (${yearLabel})`;
+            document.getElementById('stat-total-rkap').textContent = rkapDataForDashboard.length;
+            
+            const allDocs = state.sopData.flatMap(sop => sop.documents);
+            const checkedDocs = allDocs.filter(d => d.checked);
+            const sopProgress = allDocs.length > 0 ? Math.round((checkedDocs.length / allDocs.length) * 100) : 100;
+            document.getElementById('stat-sop-progress').textContent = `${sopProgress}%`;
+
+            // SOP Progress Chart
+            const sopChartCtx = document.getElementById('sopProgressChart').getContext('2d');
+            if(sopProgressChart) sopProgressChart.destroy();
+            sopProgressChart = new Chart(sopChartCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Selesai', 'Belum Selesai'],
+                    datasets: [{
+                        data: [checkedDocs.length, allDocs.length - checkedDocs.length],
+                        backgroundColor: ['#28a745', '#e9ecef'],
+                        borderColor: ['#ffffff'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    cutout: '70%',
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            // Budget Chart
+            document.getElementById('budget-chart-year').textContent = yearLabel;
+            const budgetChartCtx = document.getElementById('budgetChart').getContext('2d');
+            const totalEstimasi = rkapDataForDashboard.reduce((sum, rkap) => sum + (rkap.estimasiAnggaran || 0), 0);
+            const totalRealisasi = rkapDataForDashboard.reduce((sum, rkap) => sum + (rkap.realisasiAnggaran || 0), 0);
+            if(budgetChart) budgetChart.destroy();
+            budgetChart = new Chart(budgetChartCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Anggaran'],
+                    datasets: [{
+                        label: 'Estimasi',
+                        data: [totalEstimasi],
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                    }, {
+                        label: 'Realisasi',
+                        data: [totalRealisasi],
+                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { callback: value => 'Rp ' + formatCurrency(value) }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                             callbacks: { label: context => `${context.dataset.label}: Rp ${formatCurrency(context.raw)}` }
+                        }
+                    }
+                }
+            });
+
+            // Upcoming RKAP List
+            const upcomingRkapList = document.getElementById('upcoming-rkap-list');
+            upcomingRkapList.innerHTML = '';
+            const upcomingRkaps = rkapDataForDashboard
+                .filter(r => r.targetDate && new Date(r.targetDate) >= new Date())
+                .sort((a,b) => new Date(a.targetDate) - new Date(b.targetDate))
+                .slice(0, 5);
+            
+            if (upcomingRkaps.length > 0) {
+                 upcomingRkaps.forEach(rkap => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center p-2 rounded-md hover:bg-gray-50';
+                    li.innerHTML = `
+                        <div>
+                            <p class="font-semibold text-gray-800">${rkap.title}</p>
+                            <p class="text-xs text-gray-500">${rkap.year}</p>
+                        </div>
+                        <span class="font-medium text-blue-600">${new Date(rkap.targetDate).toLocaleDateString('id-ID', {day:'2-digit', month:'short', year:'numeric'})}</span>
+                    `;
+                    upcomingRkapList.appendChild(li);
+                });
+            } else {
+                upcomingRkapList.innerHTML = `<li class="text-center text-gray-500 italic">Tidak ada program mendatang.</li>`
+            }
+        }
+
 
         function renderSOPs() {
+            let sopsToRender = state.sopData;
+
+            if (sopFilterId) {
+                sopsToRender = state.sopData.filter(s => s.id === sopFilterId);
+                const sopTitle = sopsToRender.length > 0 ? sopsToRender[0].title : '';
+                sopFilterText.innerHTML = `Menampilkan filter untuk: <strong class="font-semibold">${sopTitle}</strong>`;
+                sopFilterContainer.classList.remove('hidden');
+            } else {
+                sopFilterContainer.classList.add('hidden');
+            }
+
+            if (sopSearchTerm) {
+                const lowercasedTerm = sopSearchTerm.toLowerCase();
+                sopsToRender = sopsToRender.filter(sop => 
+                    sop.title.toLowerCase().includes(lowercasedTerm)
+                );
+            }
+
             sopListContainer.innerHTML = '';
-            if (!state.sopData || state.sopData.length === 0) {
-                sopListContainer.innerHTML = `<div class="bg-white p-6 rounded-lg shadow-sm text-center text-gray-500"><p>Tidak ada data SOP.</p></div>`;
+            if (!sopsToRender || sopsToRender.length === 0) {
+                sopListContainer.innerHTML = `<div class="bg-white p-6 rounded-lg shadow-sm text-center text-gray-500"><p>Tidak ada data SOP yang cocok.</p></div>`;
                 return;
             }
-            state.sopData.forEach(sop => {
+            sopsToRender.forEach(sop => {
                 const sopProgress = calculateSOPProgress(sop);
                 const accordion = document.createElement('div');
                 accordion.className = 'bg-white rounded-xl shadow-sm overflow-hidden sop-accordion';
                 accordion.dataset.sopId = sop.id;
                 let documentsHtml = sop.documents.map(doc => `
                     <li class="flex items-center justify-between p-3 border-t border-gray-200">
-                        <div class="flex items-center">
-                            <input type="checkbox" id="doc-${sop.id}-${doc.id}" data-sop-id="${sop.id}" data-doc-id="${doc.id}" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" ${doc.checked ? 'checked' : ''}>
-                            <label for="doc-${sop.id}-${doc.id}" class="ml-3 text-sm text-gray-700">${doc.name}</label>
+                        <div class="flex items-center flex-grow">
+                            <input type="checkbox" id="doc-${doc.id}" data-sop-id="${sop.id}" data-doc-id="${doc.id}" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" ${doc.checked ? 'checked' : ''}>
+                            <label for="doc-${doc.id}" class="ml-3 text-sm text-gray-700">${doc.name}</label>
                         </div>
-                        <i class="fas fa-paperclip attachment-icon ${doc.attachment ? 'has-attachment' : ''}" 
-                           data-sop-id="${sop.id}" 
-                           data-doc-id="${doc.id}"
-                           title="${doc.attachment ? 'Buka lampiran. Tahan Alt+Klik untuk edit.' : 'Tambahkan lampiran'}"></i>
+                        <div class="flex items-center">
+                            <i class="fas fa-paperclip attachment-icon ${doc.attachment ? 'has-attachment' : ''}" 
+                                data-sop-id="${sop.id}" 
+                                data-doc-id="${doc.id}"
+                                title="${doc.attachment ? 'Buka lampiran' : 'Tambahkan lampiran'}"></i>
+                        </div>
                     </li>
                 `).join('');
                 if (sop.documents.length === 0) {
@@ -210,21 +548,110 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
                            <span class="text-sm font-semibold text-gray-600">${sopProgress}%</span>
+                           <button class="delete-sop-btn p-2" data-sop-id="${sop.id}" title="Hapus SOP"><i class="fas fa-trash-alt delete-icon"></i></button>
                            <i class="fas fa-chevron-down chevron text-gray-500"></i>
                         </div>
                     </div>
                     <div class="accordion-content">
                         <ul class="bg-gray-50">${documentsHtml}</ul>
+                        <div class="p-3 border-t border-gray-200">
+                            <button class="add-document-btn text-sm text-blue-600 hover:text-blue-800 font-semibold" data-sop-id="${sop.id}">
+                                <i class="fas fa-plus-circle mr-1"></i> Tambah Dokumen
+                            </button>
+                        </div>
                     </div>
                 `;
                 sopListContainer.appendChild(accordion);
             });
-            addEventListeners();
+            addSopEventListeners();
             updateOverallProgress();
         }
         
+        function renderRKAPs() {
+            rkapListContainer.innerHTML = '';
+            let filteredRkaps = state.rkapData.filter(r => r.year == currentRkapYear);
+
+            if (rkapSearchTerm) {
+                const lowercasedTerm = rkapSearchTerm.toLowerCase();
+                filteredRkaps = filteredRkaps.filter(rkap => 
+                    rkap.title.toLowerCase().includes(lowercasedTerm)
+                );
+            }
+
+            if (filteredRkaps.length === 0) {
+                rkapListContainer.innerHTML = `<div class="bg-white p-6 rounded-lg shadow-sm text-center text-gray-500"><p>Tidak ada data RKAP untuk tahun ${currentRkapYear}.</p></div>`;
+                return;
+            }
+
+            filteredRkaps.forEach(rkap => {
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-xl shadow-sm p-4';
+
+                const relatedSops = rkap.relatedSop || [];
+                let sopCheckboxOptions = state.sopData.map(sop => {
+                    const isChecked = relatedSops.includes(sop.id);
+                    return `
+                        <label class="flex items-center p-2 hover:bg-gray-100 cursor-pointer">
+                            <input type="checkbox" class="sop-multiselect-checkbox h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" data-sop-id="${sop.id}" ${isChecked ? 'checked' : ''}>
+                            <span class="ml-2 text-sm text-gray-700">${sop.title}</span>
+                        </label>
+                    `;
+                }).join('');
+
+                let sopTags = relatedSops.map(sopId => {
+                    const sop = state.sopData.find(s => s.id === sopId);
+                    return sop ? `<a href="#" data-sop-id="${sop.id}" class="sop-link-tag bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full transition-colors">${sop.title.split(':')[0]}</a>` : '';
+                }).join('');
+                
+                let buttonText = relatedSops.length > 0 ? `${relatedSops.length} SOP terpilih` : 'Pilih SOP Terkait';
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                         <h3 class="font-bold text-gray-800 mb-4 flex-1">${rkap.title}</h3>
+                         <button class="delete-rkap-btn p-2" data-rkap-id="${rkap.id}" title="Hapus RKAP"><i class="fas fa-trash-alt delete-icon"></i></button>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                            <div>
+                                <label for="date-${rkap.id}" class="block text-sm font-medium text-gray-600 mb-1">Target Estimasi Penyelesaian</label>
+                                <input type="date" id="date-${rkap.id}" data-rkap-id="${rkap.id}" data-field="targetDate" value="${rkap.targetDate || ''}" class="rkap-date-input w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-600 mb-1">Tautan ke SOP</label>
+                                <div class="relative" data-rkap-id="${rkap.id}">
+                                    <button class="sop-multiselect-toggle w-full p-2 bg-white border border-gray-300 rounded-md shadow-sm text-left flex justify-between items-center">
+                                        <span>${buttonText}</span>
+                                        <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
+                                    </button>
+                                    <div class="sop-multiselect-options hidden absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
+                                        ${sopCheckboxOptions}
+                                    </div>
+                                </div>
+                                <div class="sop-tags-container mt-2 flex flex-wrap gap-1">
+                                    ${sopTags}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                             <div>
+                                <label for="estimasi-${rkap.id}" class="block text-sm font-medium text-gray-600 mb-1">Estimasi Anggaran (Rp)</label>
+                                <input type="text" id="estimasi-${rkap.id}" data-rkap-id="${rkap.id}" data-field="estimasiAnggaran" value="${formatCurrency(rkap.estimasiAnggaran || 0)}" class="rkap-budget-input text-right w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label for="realisasi-${rkap.id}" class="block text-sm font-medium text-gray-600 mb-1">Realisasi Anggaran (Rp)</label>
+                                <input type="text" id="realisasi-${rkap.id}" data-rkap-id="${rkap.id}" data-field="realisasiAnggaran" value="${formatCurrency(rkap.realisasiAnggaran || 0)}" class="rkap-budget-input text-right w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+                `;
+                rkapListContainer.appendChild(card);
+            });
+            addRkapEventListeners();
+        }
+
+        // --- FUNGSI KALKULASI & UPDATE UI ---
         function calculateSOPProgress(sop) {
             if (sop.documents.length === 0) return 100;
             const checkedDocs = sop.documents.filter(d => d.checked).length;
@@ -244,7 +671,8 @@
             overallProgressText.textContent = `${percentage}%`;
         }
         
-        function addEventListeners() {
+        // --- EVENT LISTENERS ---
+        function addSopEventListeners() {
             sopListContainer.querySelectorAll('.accordion-header').forEach(header => {
                 header.addEventListener('click', () => header.parentElement.classList.toggle('accordion-open'));
             });
@@ -254,51 +682,236 @@
             sopListContainer.querySelectorAll('.attachment-icon').forEach(icon => {
                 icon.addEventListener('click', handleAttachmentClick);
             });
+            sopListContainer.querySelectorAll('.delete-sop-btn').forEach(button => {
+                button.addEventListener('click', handleDeleteSopClick);
+            });
+            sopListContainer.querySelectorAll('.add-document-btn').forEach(button => {
+                button.addEventListener('click', handleAddDocumentClick);
+            });
         }
         
+        function addRkapEventListeners() {
+            rkapListContainer.querySelectorAll('.rkap-date-input').forEach(element => {
+                element.addEventListener('change', handleRkapDateChange);
+            });
+            rkapListContainer.querySelectorAll('.rkap-budget-input').forEach(input => {
+                input.addEventListener('input', handleBudgetInputFormatting);
+                input.addEventListener('change', handleRkapBudgetChange);
+            });
+            rkapListContainer.querySelectorAll('.delete-rkap-btn').forEach(button => {
+                button.addEventListener('click', handleDeleteRkapClick);
+            });
+            rkapListContainer.querySelectorAll('.sop-multiselect-toggle').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const options = e.currentTarget.nextElementSibling;
+                    options.classList.toggle('hidden');
+                });
+            });
+            rkapListContainer.querySelectorAll('.sop-multiselect-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', handleSopSelectionChange);
+            });
+            rkapListContainer.querySelectorAll('.sop-link-tag').forEach(tag => {
+                tag.addEventListener('click', handleSopLinkClick);
+            });
+        }
+        
+        function handleSopLinkClick(event) {
+            event.preventDefault();
+            sopFilterId = event.currentTarget.dataset.sopId;
+            sopSearchTerm = '';
+            sopSearchInput.value = '';
+            if (!sopFilterId) return;
+
+            renderSOPs();
+            tabSop.click();
+
+            const sopAccordion = sopListContainer.querySelector(`.sop-accordion[data-sop-id="${sopFilterId}"]`);
+            if (sopAccordion) {
+                setTimeout(() => {
+                    sopAccordion.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    sopAccordion.classList.add('accordion-open');
+                }, 100);
+            }
+        }
+        
+        async function handleRkapDateChange(event) {
+            const { rkapId, field } = event.target.dataset;
+            const rkapItem = state.rkapData.find(r => r.id === rkapId);
+            if (rkapItem) {
+                rkapItem[field] = event.target.value;
+                await saveData();
+            }
+        }
+        
+        function handleBudgetInputFormatting(event) {
+            const input = event.target;
+            const value = parseCurrency(input.value);
+            const formattedValue = formatCurrency(value);
+            // To maintain cursor position, we only update if value changed
+            if (input.value !== formattedValue) {
+                input.value = formattedValue;
+            }
+        }
+
+        async function handleRkapBudgetChange(event) {
+            const { rkapId, field } = event.target.dataset;
+            const rkapItem = state.rkapData.find(r => r.id === rkapId);
+            if (rkapItem) {
+                rkapItem[field] = parseCurrency(event.target.value);
+                await saveData();
+            }
+        }
+
+        async function handleSopSelectionChange(event) {
+            const checkbox = event.currentTarget;
+            const rkapId = checkbox.closest('.relative').dataset.rkapId;
+            const sopId = checkbox.dataset.sopId;
+            const rkapItem = state.rkapData.find(r => r.id === rkapId);
+            if (!rkapItem) return;
+
+            if (!Array.isArray(rkapItem.relatedSop)) {
+                rkapItem.relatedSop = [];
+            }
+
+            const isChecked = checkbox.checked;
+            const sopIndex = rkapItem.relatedSop.indexOf(sopId);
+
+            if (isChecked && sopIndex === -1) {
+                rkapItem.relatedSop.push(sopId);
+            } else if (!isChecked && sopIndex > -1) {
+                rkapItem.relatedSop.splice(sopIndex, 1);
+            }
+            await saveData();
+        }
+
+        function handleDeleteRkapClick(event) {
+            const rkapId = event.currentTarget.dataset.rkapId;
+            const rkapItem = state.rkapData.find(r => r.id === rkapId);
+            if(!rkapItem) return;
+
+            showModal({
+                title: 'Konfirmasi Penghapusan',
+                body: `<p>Apakah Anda yakin ingin menghapus RKAP: <strong class="font-semibold">${rkapItem.title}</strong>?</p>`,
+                buttons: [
+                    { label: 'Batal', classes: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg' },
+                    { 
+                        label: 'Hapus', 
+                        classes: 'bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg',
+                        onClick: async () => {
+                            state.rkapData = state.rkapData.filter(r => r.id !== rkapId);
+                            await saveData();
+                        }
+                    }
+                ]
+            });
+        }
+        
+        function handleDeleteSopClick(event) {
+            event.stopPropagation();
+            const sopId = event.currentTarget.dataset.sopId;
+            const sop = state.sopData.find(s => s.id === sopId);
+            if (!sop) return;
+            showModal({
+                title: 'Konfirmasi Penghapusan SOP',
+                body: `<p>Apakah Anda yakin ingin menghapus SOP: <strong class="font-semibold">${sop.title}</strong>? Semua dokumen di dalamnya juga akan terhapus.</p>`,
+                buttons: [
+                    { label: 'Batal', classes: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg' },
+                    { 
+                        label: 'Hapus', 
+                        classes: 'bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg',
+                        onClick: async () => {
+                            state.sopData = state.sopData.filter(s => s.id !== sopId);
+                            await saveData();
+                        }
+                    }
+                ]
+            });
+        }
+
+        function handleAddDocumentClick(event) {
+            const sopId = event.currentTarget.dataset.sopId;
+            showModal({
+                title: 'Tambah Dokumen Baru',
+                body: `<input type="text" id="new-doc-name" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Nama dokumen checklist...">`,
+                buttons: [
+                    { label: 'Batal', classes: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg' },
+                    {
+                        label: 'Simpan',
+                        classes: 'bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg',
+                        onClick: async () => {
+                            const name = document.getElementById('new-doc-name').value.trim();
+                            const sop = state.sopData.find(s => s.id === sopId);
+                            if (name && sop) {
+                                const newDoc = {
+                                    id: `${sopId}-doc-${Date.now()}`,
+                                    name: name,
+                                    checked: false,
+                                    attachment: ''
+                                };
+                                sop.documents.push(newDoc);
+                                await saveData();
+                            }
+                        }
+                    }
+                ]
+            });
+             setTimeout(() => document.getElementById('new-doc-name').focus(), 100);
+        }
+
         async function handleCheckboxChange(event) {
             const { sopId, docId } = event.target.dataset;
             const sop = state.sopData.find(s => s.id === sopId);
             const doc = sop?.documents.find(d => d.id == docId);
             if (doc) {
                 doc.checked = event.target.checked;
-                const sopAccordion = document.querySelector(`.sop-accordion[data-sop-id="${sopId}"]`);
-                const sopProgress = calculateSOPProgress(sop);
-                sopAccordion.querySelector('.progress-bar-fg').style.width = `${sopProgress}%`;
-                sopAccordion.querySelector('.font-semibold').textContent = `${sopProgress}%`;
-                updateOverallProgress();
                 await saveData();
             }
         }
         
-        async function handleAttachmentClick(event) {
+        function handleAttachmentClick(event) {
             const { sopId, docId } = event.currentTarget.dataset;
             const sop = state.sopData.find(s => s.id === sopId);
             const doc = sop?.documents.find(d => d.id == docId);
             if (!doc) return;
+
             const hasAttachment = doc.attachment && doc.attachment.trim() !== '';
-            if (hasAttachment && !event.altKey) {
+            if (hasAttachment) {
                 window.open(doc.attachment, '_blank');
                 return;
             }
-            const message = hasAttachment ? "Edit URL lampiran:" : "Masukkan URL lampiran:";
-            const newUrl = prompt(message, doc.attachment || '');
-            if (newUrl !== null) {
-                doc.attachment = newUrl.trim();
-                await saveData();
-                event.currentTarget.classList.toggle('has-attachment', doc.attachment !== '');
-                event.currentTarget.title = doc.attachment ? 'Buka lampiran. Tahan Alt+Klik untuk edit.' : 'Tambahkan lampiran';
-            }
+
+            showModal({
+                title: 'Tambah Lampiran',
+                body: `
+                    <label for="attachment-url" class="block text-sm font-medium text-gray-700">URL Lampiran</label>
+                    <input type="text" id="attachment-url" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="https://...">
+                `,
+                buttons: [
+                    { label: 'Batal', classes: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg' },
+                    { 
+                        label: 'Simpan', 
+                        classes: 'bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg',
+                        onClick: async () => {
+                            const newUrl = document.getElementById('attachment-url').value;
+                            if (newUrl) {
+                                doc.attachment = newUrl.trim();
+                                await saveData();
+                            }
+                        }
+                    }
+                ]
+            });
+            setTimeout(() => document.getElementById('attachment-url').focus(), 100);
         }
 
+        // --- MANAJEMEN DATA (Local & Firestore) ---
         function saveDataToLocal() {
             try {
                 const dataToSave = {
                     version: DATA_VERSION,
-                    sopData: state.sopData
+                    ...state
                 };
                 localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
-                console.log("Data berhasil disimpan ke penyimpanan lokal browser (versi: " + DATA_VERSION + ").");
             } catch (e) {
                 console.error("Gagal menyimpan ke penyimpanan lokal:", e);
             }
@@ -310,28 +923,20 @@
                 try {
                     const localData = JSON.parse(localDataString);
                     if (localData.version === DATA_VERSION) {
-                        console.log("Data (versi " + localData.version + ") ditemukan di penyimpanan lokal, memuat...");
-                        return localData.sopData;
-                    } else {
-                        console.warn("Versi data lokal (" + (localData.version || 'lama') + ") tidak cocok dengan versi kode (" + DATA_VERSION + "). Memuat data baru.");
+                        return { sopData: localData.sopData || initialSopData, rkapData: localData.rkapData || initialRkapData };
                     }
                 } catch (e) {
                      console.error("Gagal mem-parsing data lokal, memuat data baru.", e);
                 }
             }
-            console.log("Tidak ada data valid di penyimpanan lokal, menggunakan data awal.");
-            return initialSopData;
+            return { sopData: initialSopData, rkapData: initialRkapData };
         }
 
         async function saveDataToFirestore() {
-            if (!db || !userId) {
-                console.error("Gagal menyimpan ke Firestore: Koneksi atau User ID tidak ada.");
-                return; 
-            }
+            if (!db || !userId) return; 
             try {
-                const docRef = doc(db, `artifacts/${appId}/users/${userId}/it_checklist/data`);
-                await setDoc(docRef, { sopData: state.sopData });
-                console.log("Data berhasil disimpan ke Firestore.");
+                const docRef = doc(db, `artifacts/${appId}/users/${userId}/it_docs/data`);
+                await setDoc(docRef, state);
             } catch (error) {
                 console.error("Error saat menyimpan ke Firestore:", error);
             }
@@ -342,22 +947,182 @@
                 await saveDataToFirestore();
             } else {
                 saveDataToLocal();
+                // In local mode, we need to manually re-render
+                updateStateAndRender(state);
             }
         }
 
-        function initializeAppData(data) {
-            state.sopData = data;
-            renderSOPs();
+        function updateStateAndRender(data) {
+            state.sopData = data.sopData || initialSopData;
+            state.rkapData = (data.rkapData || initialRkapData).map(rkap => ({
+                ...rkap,
+                estimasiAnggaran: rkap.estimasiAnggaran || 0,
+                realisasiAnggaran: rkap.realisasiAnggaran || 0,
+            }));
+            
+            const rkapYears = [...new Set(state.rkapData.map(r => r.year))].sort((a, b) => b - a);
+            dashboardYearFilter.innerHTML = '<option value="all">Semua Tahun</option>';
+            rkapYears.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                dashboardYearFilter.appendChild(option);
+            });
+            dashboardYearFilter.value = dashboardFilterYear;
+            
+            renderAll();
             loadingOverlay.style.display = 'none';
         }
 
-        // --- INISIALISASI ---
+        // --- FUNGSI NAVIGASI & SETUP ---
+        function setupTabs() {
+            const tabs = [
+                { button: tabDashboard, page: dashboardPage },
+                { button: tabSop, page: sopPage },
+                { button: tabRkap, page: rkapPage }
+            ];
+            
+            tabs.forEach(tab => {
+                tab.button.addEventListener('click', () => {
+                    tabs.forEach(t => {
+                        t.page.classList.add('hidden');
+                        t.button.classList.remove('active', 'text-gray-900');
+                        t.button.classList.add('text-gray-500');
+                    });
+                    tab.page.classList.remove('hidden');
+                    tab.button.classList.add('active', 'text-gray-900');
+                });
+            });
+        }
+        
+        function setupAddSopButton() {
+             addSopBtn.addEventListener('click', () => {
+                showModal({
+                    title: 'Tambah SOP Baru',
+                    body: `
+                        <div class="space-y-4">
+                            <div>
+                                <label for="new-sop-title" class="block text-sm font-medium text-gray-700">Judul SOP</label>
+                                <input type="text" id="new-sop-title" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="SOP-IT-XXX: Nama SOP">
+                            </div>
+                            <div>
+                                <label for="new-sop-waktu" class="block text-sm font-medium text-gray-700">Waktu Pelaksanaan</label>
+                                <input type="text" id="new-sop-waktu" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="Contoh: Setiap Hari, 6 bulan sekali">
+                            </div>
+                        </div>
+                    `,
+                    buttons: [
+                        { label: 'Batal', classes: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg' },
+                        {
+                            label: 'Simpan',
+                            classes: 'bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg',
+                            onClick: async () => {
+                                const title = document.getElementById('new-sop-title').value.trim();
+                                const waktu = document.getElementById('new-sop-waktu').value.trim();
+                                if (title) {
+                                    const newSop = {
+                                        id: `sop-${Date.now()}`,
+                                        title: title,
+                                        waktu: waktu,
+                                        documents: []
+                                    };
+                                    state.sopData.push(newSop);
+                                    await saveData();
+                                }
+                            }
+                        }
+                    ]
+                });
+                 setTimeout(() => document.getElementById('new-sop-title').focus(), 100);
+            });
+        }
+
+        function setupAddRkapButton() {
+            addRkapBtn.addEventListener('click', () => {
+                showModal({
+                    title: `Tambah RKAP Tahun ${currentRkapYear}`,
+                    body: `<input type="text" id="new-rkap-title" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Nama program kerja...">`,
+                    buttons: [
+                        { label: 'Batal', classes: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg' },
+                        {
+                            label: 'Simpan',
+                            classes: 'bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg',
+                            onClick: async () => {
+                                const titleInput = document.getElementById('new-rkap-title');
+                                const title = titleInput.value.trim();
+                                if (title) {
+                                    const newRkapItem = {
+                                        id: `rkap-${Date.now()}`,
+                                        year: parseInt(currentRkapYear),
+                                        title: title,
+                                        targetDate: '',
+                                        relatedSop: [],
+                                        estimasiAnggaran: 0,
+                                        realisasiAnggaran: 0
+                                    };
+                                    state.rkapData.push(newRkapItem);
+                                    await saveData();
+                                }
+                            }
+                        }
+                    ]
+                });
+                setTimeout(() => document.getElementById('new-rkap-title').focus(), 100);
+            });
+        }
+
+        // --- INISIALISASI APLIKASI ---
         document.addEventListener('DOMContentLoaded', () => {
+            setupTabs();
+            setupAddRkapButton();
+            setupAddSopButton();
+            
+            sopSearchInput.addEventListener('input', (e) => {
+                sopFilterId = null;
+                sopSearchTerm = e.target.value;
+                renderSOPs();
+            });
+
+            rkapSearchInput.addEventListener('input', (e) => {
+                rkapSearchTerm = e.target.value;
+                renderRKAPs();
+            });
+
+            clearSopFilterBtn.addEventListener('click', () => {
+                sopFilterId = null;
+                renderSOPs();
+            });
+
+            dashboardYearFilter.addEventListener('change', e => {
+                dashboardFilterYear = e.target.value;
+                renderDashboard();
+            });
+
+            const systemYear = new Date().getFullYear();
+            for (let i = systemYear - 2; i <= systemYear + 5; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                rkapYearSelector.appendChild(option);
+            }
+            currentRkapYear = systemYear;
+            rkapYearSelector.value = currentRkapYear;
+            rkapYearSelector.addEventListener('change', (e) => {
+                currentRkapYear = e.target.value;
+                renderRKAPs();
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.relative')) {
+                    rkapListContainer.querySelectorAll('.sop-multiselect-options').forEach(options => {
+                        options.classList.add('hidden');
+                    });
+                }
+            });
+
             if (!firebaseConfig) {
-                console.warn("Firebase config tidak ditemukan. Menjalankan dalam mode penyimpanan lokal.");
                 isOnlineMode = false;
-                const data = loadDataFromLocal();
-                initializeAppData(data);
+                updateStateAndRender(loadDataFromLocal());
                 return;
             }
 
@@ -366,24 +1131,24 @@
                 db = getFirestore(app);
                 auth = getAuth(app);
                 isOnlineMode = true;
-                console.log("Firebase berhasil diinisialisasi. Menjalankan dalam mode online.");
 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
                         if (unsubscribe) unsubscribe(); 
-                        const docRef = doc(db, `artifacts/${appId}/users/${userId}/it_checklist/data`);
+                        const docRef = doc(db, `artifacts/${appId}/users/${userId}/it_docs/data`);
                         unsubscribe = onSnapshot(docRef, (docSnap) => {
-                            if (docSnap.exists()) {
-                                initializeAppData(docSnap.data().sopData);
+                            if (docSnap.exists() && docSnap.data().rkapData) {
+                                updateStateAndRender(docSnap.data());
                             } else {
-                                initializeAppData(initialSopData);
-                                saveDataToFirestore();
+                                const initialData = { sopData: initialSopData, rkapData: initialRkapData };
+                                updateStateAndRender(initialData);
+                                saveData(); 
                             }
                         }, (error) => {
                            console.error("Error onSnapshot:", error);
                            isOnlineMode = false;
-                           initializeAppData(loadDataFromLocal());
+                           updateStateAndRender(loadDataFromLocal());
                         });
                     } else {
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -396,8 +1161,7 @@
             } catch (error) {
                 console.error("Error inisialisasi Firebase. Beralih ke mode penyimpanan lokal.", error);
                 isOnlineMode = false;
-                const data = loadDataFromLocal();
-                initializeAppData(data);
+                updateStateAndRender(loadDataFromLocal());
             }
         });
     </script>
