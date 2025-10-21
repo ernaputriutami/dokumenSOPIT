@@ -108,10 +108,10 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- KONFIGURASI DAN DATA ---
-
+        const LOCAL_STORAGE_KEY = 'itChecklistData';
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'it-checklist-app';
         let firebaseConfig;
         try {
@@ -151,20 +151,15 @@
             { id: 'sop-27', title: 'SOP-IT-027: Pengelolaan Monitoring Izin Masuk Ruang Data Center', waktu: 'Setiap hari', documents: [{name:'Log Izin Masuk Ruang Data Center'}] }
         ].map(sop => ({
             ...sop,
-            documents: sop.documents.map((doc, index) => ({ 
-                id: index + 1, 
-                name: doc.name, 
-                checked: false, 
-                attachment: '' 
-            }))
+            documents: sop.documents.map((doc, index) => ({ id: index + 1, name: doc.name, checked: false, attachment: '' }))
         }));
-
 
         // --- VARIABEL GLOBAL ---
         let state = { sopData: [] };
         let db, auth;
         let userId = null;
         let unsubscribe = null;
+        let isOnlineMode = false;
 
         // --- ELEMEN DOM ---
         const sopListContainer = document.getElementById('sop-list');
@@ -180,13 +175,11 @@
                 sopListContainer.innerHTML = `<div class="bg-white p-6 rounded-lg shadow-sm text-center text-gray-500"><p>Tidak ada data SOP.</p></div>`;
                 return;
             }
-
             state.sopData.forEach(sop => {
                 const sopProgress = calculateSOPProgress(sop);
                 const accordion = document.createElement('div');
                 accordion.className = 'bg-white rounded-xl shadow-sm overflow-hidden sop-accordion';
                 accordion.dataset.sopId = sop.id;
-
                 let documentsHtml = sop.documents.map(doc => `
                     <li class="flex items-center justify-between p-3 border-t border-gray-200">
                         <div class="flex items-center">
@@ -199,11 +192,9 @@
                            title="${doc.attachment ? 'Buka lampiran. Tahan Alt+Klik untuk edit.' : 'Tambahkan lampiran'}"></i>
                     </li>
                 `).join('');
-                
                 if (sop.documents.length === 0) {
                     documentsHtml = `<li class="p-3 border-t border-gray-200 text-sm text-gray-500 italic">Tidak ada dokumen untuk SOP ini.</li>`;
                 }
-
                 accordion.innerHTML = `
                     <div class="accordion-header p-4 flex justify-between items-center">
                         <div class="flex-1 mr-4">
@@ -248,7 +239,6 @@
             }
             const checkedDocs = allDocs.filter(d => d.checked).length;
             const percentage = Math.round((checkedDocs / allDocs.length) * 100);
-
             overallProgressBar.style.width = `${percentage}%`;
             overallProgressText.textContent = `${percentage}%`;
         }
@@ -257,11 +247,9 @@
             sopListContainer.querySelectorAll('.accordion-header').forEach(header => {
                 header.addEventListener('click', () => header.parentElement.classList.toggle('accordion-open'));
             });
-
             sopListContainer.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
                 checkbox.addEventListener('change', handleCheckboxChange);
             });
-            
             sopListContainer.querySelectorAll('.attachment-icon').forEach(icon => {
                 icon.addEventListener('click', handleAttachmentClick);
             });
@@ -286,52 +274,61 @@
             const { sopId, docId } = event.currentTarget.dataset;
             const sop = state.sopData.find(s => s.id === sopId);
             const doc = sop?.documents.find(d => d.id == docId);
-
             if (!doc) return;
-
             const hasAttachment = doc.attachment && doc.attachment.trim() !== '';
-
-            // If it has an attachment and Alt key is NOT pressed, open the link.
             if (hasAttachment && !event.altKey) {
                 window.open(doc.attachment, '_blank');
                 return;
             }
-
-            // Otherwise, prompt to edit/add.
-            const message = hasAttachment 
-                ? "Edit URL lampiran:"
-                : "Masukkan URL lampiran:";
+            const message = hasAttachment ? "Edit URL lampiran:" : "Masukkan URL lampiran:";
             const newUrl = prompt(message, doc.attachment || '');
-
-            // `prompt` returns null if user cancels.
             if (newUrl !== null) {
                 doc.attachment = newUrl.trim();
                 await saveData();
-                // Update UI directly
                 event.currentTarget.classList.toggle('has-attachment', doc.attachment !== '');
                 event.currentTarget.title = doc.attachment ? 'Buka lampiran. Tahan Alt+Klik untuk edit.' : 'Tambahkan lampiran';
             }
         }
 
+        function saveDataToLocal() {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state.sopData));
+                console.log("Data berhasil disimpan ke penyimpanan lokal browser.");
+            } catch (e) {
+                console.error("Gagal menyimpan ke penyimpanan lokal:", e);
+            }
+        }
 
-        async function saveData() {
-            if (!db || !userId) return;
+        function loadDataFromLocal() {
+            const localData = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (localData) {
+                console.log("Data ditemukan di penyimpanan lokal, memuat...");
+                return JSON.parse(localData);
+            }
+            console.log("Tidak ada data di penyimpanan lokal, menggunakan data awal.");
+            return initialSopData;
+        }
+
+        async function saveDataToFirestore() {
+            if (!db || !userId) {
+                console.error("Gagal menyimpan ke Firestore: Koneksi atau User ID tidak ada.");
+                return; 
+            }
             try {
                 const docRef = doc(db, `artifacts/${appId}/users/${userId}/it_checklist/data`);
                 await setDoc(docRef, { sopData: state.sopData });
+                console.log("Data berhasil disimpan ke Firestore.");
             } catch (error) {
-                console.error("Error saving data to Firestore: ", error);
+                console.error("Error saat menyimpan ke Firestore:", error);
             }
         }
         
-        function migrateData(data) {
-            // Check if migration is needed. If a document doesn't have 'attachment', it's old data.
-            const needsMigration = data.some(sop => sop.documents.length > 0 && !sop.documents[0].hasOwnProperty('attachment'));
-            if (needsMigration) {
-                console.log("Migrating old data structure.");
-                return initialSopData; // Return fresh structure, user can re-check items.
+        async function saveData() {
+            if (isOnlineMode) {
+                await saveDataToFirestore();
+            } else {
+                saveDataToLocal();
             }
-            return data;
         }
 
         function initializeAppData(data) {
@@ -341,11 +338,12 @@
         }
 
         // --- INISIALISASI ---
-
         document.addEventListener('DOMContentLoaded', () => {
             if (!firebaseConfig) {
-                console.warn("Firebase config not available. Running in offline mode.");
-                initializeAppData(initialSopData);
+                console.warn("Firebase config tidak ditemukan. Menjalankan dalam mode penyimpanan lokal.");
+                isOnlineMode = false;
+                const data = loadDataFromLocal();
+                initializeAppData(data);
                 return;
             }
 
@@ -353,33 +351,26 @@
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
+                isOnlineMode = true;
+                console.log("Firebase berhasil diinisialisasi. Menjalankan dalam mode online.");
 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
                         if (unsubscribe) unsubscribe(); 
-                        
                         const docRef = doc(db, `artifacts/${appId}/users/${userId}/it_checklist/data`);
-                        
                         unsubscribe = onSnapshot(docRef, (docSnap) => {
                             if (docSnap.exists()) {
-                                let firestoreData = docSnap.data().sopData;
-                                let migratedData = migrateData(firestoreData);
-                                initializeAppData(migratedData);
-                                // If data was migrated, save the new structure back to Firestore.
-                                if (migratedData !== firestoreData) {
-                                    saveData();
-                                }
+                                initializeAppData(docSnap.data().sopData);
                             } else {
-                                console.log("No checklist found for user, creating one.");
                                 initializeAppData(initialSopData);
-                                saveData();
+                                saveDataToFirestore();
                             }
                         }, (error) => {
-                           console.error("Error with onSnapshot listener:", error);
-                           initializeAppData(initialSopData);
+                           console.error("Error onSnapshot:", error);
+                           isOnlineMode = false;
+                           initializeAppData(loadDataFromLocal());
                         });
-
                     } else {
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             await signInWithCustomToken(auth, __initial_auth_token);
@@ -389,8 +380,10 @@
                     }
                 });
             } catch (error) {
-                console.error("Error initializing Firebase:", error);
-                initializeAppData(initialSopData);
+                console.error("Error inisialisasi Firebase. Beralih ke mode penyimpanan lokal.", error);
+                isOnlineMode = false;
+                const data = loadDataFromLocal();
+                initializeAppData(data);
             }
         });
     </script>
