@@ -1539,7 +1539,8 @@
         async function saveDataToFirestore() {
             if (!db || !userId) return; 
             try {
-                const docRef = doc(db, `artifacts/${appId}/users/${userId}/it_docs/data`);
+                // Use the public path for shared data
+                const docRef = doc(db, `artifacts/${appId}/public/data/it_docs/shared_data`); 
                 await setDoc(docRef, state);
             } catch (error) {
                 console.error("Error saat menyimpan ke Firestore:", error);
@@ -1863,9 +1864,10 @@
 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
-                        userId = user.uid;
+                        userId = user.uid; // Keep userId for potential future use (e.g., individual settings)
                         if (unsubscribe) unsubscribe(); 
-                        const docRef = doc(db, `artifacts/${appId}/users/${userId}/it_docs/data`);
+                        // Use the PUBLIC path for listening
+                        const docRef = doc(db, `artifacts/${appId}/public/data/it_docs/shared_data`); 
                         unsubscribe = onSnapshot(docRef, (docSnap) => {
                             if (docSnap.exists() && docSnap.data()) {
                                 updateStateAndRender(docSnap.data());
@@ -1877,14 +1879,15 @@
                                     anggaranListData: initialAnggaranListData // Use renamed property
                                 };
                                 updateStateAndRender(initialData);
-                                saveData(); // Save the initial structure
+                                saveData(); // Save the initial structure to the public path
                             }
                         }, (error) => {
                            console.error("Error onSnapshot:", error);
                            isOnlineMode = false;
-                           updateStateAndRender(loadDataFromLocal());
+                           updateStateAndRender(loadDataFromLocal()); // Fallback to local
                         });
                     } else {
+                        // Sign in anonymously or with token to allow reading/writing public data
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             await signInWithCustomToken(auth, __initial_auth_token);
                         } else {
