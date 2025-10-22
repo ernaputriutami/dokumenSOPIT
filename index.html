@@ -149,6 +149,12 @@
             color: #6b7280; /* gray-500 */
             margin-top: 0.25rem;
         }
+         .sisa-anggaran-positif {
+            color: #10b981; /* emerald-500 */
+        }
+        .sisa-anggaran-negatif {
+            color: #ef4444; /* red-500 */
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -199,7 +205,7 @@
                     <select id="dashboard-year-filter" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></select>
                 </div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6"> <!-- Changed to lg:grid-cols-4 -->
                 <!-- Stat Cards -->
                 <div class="bg-white p-6 rounded-xl shadow-sm flex items-center space-x-4">
                     <div class="bg-blue-100 p-3 rounded-full"><i class="fas fa-file-alt text-xl text-blue-500"></i></div>
@@ -220,6 +226,13 @@
                     <div>
                         <p class="text-gray-500 text-sm">Progress SOP</p>
                         <p id="stat-sop-progress" class="text-2xl font-bold">0%</p>
+                    </div>
+                </div>
+                 <div class="bg-white p-6 rounded-xl shadow-sm flex items-center space-x-4"> <!-- New Stat Card -->
+                    <div class="bg-indigo-100 p-3 rounded-full"><i class="fas fa-wallet text-xl text-indigo-500"></i></div>
+                    <div>
+                        <p id="stat-sisa-anggaran-label" class="text-gray-500 text-sm">Sisa Anggaran (Semua)</p>
+                        <p id="stat-sisa-anggaran" class="text-2xl font-bold">Rp 0</p>
                     </div>
                 </div>
             </div>
@@ -369,7 +382,7 @@
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- KONFIGURASI DAN DATA ---
-        const DATA_VERSION = '3.2'; // Version update for RKAP budget account linking
+        const DATA_VERSION = '3.5'; // Version update for dashboard adjustments
         const LOCAL_STORAGE_KEY = 'itChecklistRkapData';
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'it-checklist-rkap-app';
         let firebaseConfig;
@@ -472,15 +485,21 @@
         const rkapSearchInput = document.getElementById('rkap-search-input');
         const alSearchInput = document.getElementById('al-search-input'); // Renamed Search ID
         const rkapFilterBtns = document.querySelectorAll('.rkap-filter-btn'); // RKAP Filter Buttons
+        const statSisaAnggaranLabel = document.getElementById('stat-sisa-anggaran-label');
+        const statSisaAnggaranValue = document.getElementById('stat-sisa-anggaran');
+
 
         // --- FUNGSI HELPER ---
         function formatCurrency(value) {
             if (isNaN(value)) return '0';
-            return new Intl.NumberFormat('id-ID').format(value);
+            // Add prefix Rp and handle negative sign correctly
+            const formatted = new Intl.NumberFormat('id-ID').format(Math.abs(value));
+            return value < 0 ? `- Rp ${formatted}` : `Rp ${formatted}`;
         }
 
+
         function parseCurrency(value) {
-            return Number(String(value).replace(/[^0-9]/g, ''));
+            return Number(String(value).replace(/[^0-9-]/g, '')); // Keep the negative sign if present
         }
         
         function getCurrentDateString() {
@@ -566,6 +585,17 @@
             const sopProgress = allDocs.length > 0 ? Math.round((checkedDocs.length / allDocs.length) * 100) : 100;
             document.getElementById('stat-sop-progress').textContent = `${sopProgress}%`;
 
+            // Calculate Sisa Anggaran
+            const totalEstimasi = rkapDataForDashboard.reduce((sum, rkap) => sum + (rkap.estimasiAnggaran || 0), 0);
+            const totalRealisasi = rkapDataForDashboard.reduce((sum, rkap) => sum + (rkap.realisasiAnggaran || 0), 0);
+            const totalSisaAnggaran = totalEstimasi - totalRealisasi;
+
+             // Update Sisa Anggaran Stat Card
+            statSisaAnggaranLabel.textContent = `Sisa Anggaran (${yearLabel})`;
+            statSisaAnggaranValue.textContent = formatCurrency(totalSisaAnggaran);
+            statSisaAnggaranValue.className = `text-2xl font-bold ${totalSisaAnggaran >= 0 ? 'sisa-anggaran-positif' : 'sisa-anggaran-negatif'}`;
+
+
             // SOP Progress Chart
             const sopChartCtx = document.getElementById('sopProgressChart').getContext('2d');
             if(sopProgressChart) sopProgressChart.destroy();
@@ -591,8 +621,8 @@
             // Budget Chart
             document.getElementById('budget-chart-year').textContent = yearLabel;
             const budgetChartCtx = document.getElementById('budgetChart').getContext('2d');
-            const totalEstimasi = rkapDataForDashboard.reduce((sum, rkap) => sum + (rkap.estimasiAnggaran || 0), 0);
-            const totalRealisasi = rkapDataForDashboard.reduce((sum, rkap) => sum + (rkap.realisasiAnggaran || 0), 0);
+            // const totalEstimasi = rkapDataForDashboard.reduce((sum, rkap) => sum + (rkap.estimasiAnggaran || 0), 0); // Already calculated
+            // const totalRealisasi = rkapDataForDashboard.reduce((sum, rkap) => sum + (rkap.realisasiAnggaran || 0), 0); // Already calculated
             const totalEstimasiBBM = rkapDataForDashboard.filter(r => r.jenisAnggaran === 'BBM').reduce((sum, rkap) => sum + (rkap.estimasiAnggaran || 0), 0);
             const totalRealisasiBBM = rkapDataForDashboard.filter(r => r.jenisAnggaran === 'BBM').reduce((sum, rkap) => sum + (rkap.realisasiAnggaran || 0), 0);
             const totalEstimasiBU = rkapDataForDashboard.filter(r => r.jenisAnggaran === 'BU').reduce((sum, rkap) => sum + (rkap.estimasiAnggaran || 0), 0);
@@ -626,12 +656,12 @@
                          y: { 
                              stacked: false,
                              beginAtZero: true,
-                             ticks: { callback: value => 'Rp ' + formatCurrency(value) }
+                             ticks: { callback: value => 'Rp ' + formatCurrency(value).replace('Rp ','') } // Remove Rp prefix for y-axis
                          }
                     },
                     plugins: {
                         tooltip: {
-                             callbacks: { label: context => `${context.dataset.label}: Rp ${formatCurrency(context.raw)}` }
+                             callbacks: { label: context => `${context.dataset.label}: ${formatCurrency(context.raw)}` } // Use formatCurrency for tooltip
                         }
                     }
                 }
@@ -639,33 +669,49 @@
             
              // Budget Type Pie Chart (Estimasi)
             document.getElementById('budget-type-chart-year').textContent = yearLabel;
-            const budgetTypeCtx = document.getElementById('budgetTypeChart').getContext('2d');
-            if (budgetTypeChart) budgetTypeChart.destroy();
-            budgetTypeChart = new Chart(budgetTypeCtx, {
-                type: 'pie',
-                data: {
-                    labels: ['BBM (Beban Barang Modal)', 'BU (Beban Usaha)'],
-                    datasets: [{
-                        data: [totalEstimasiBBM, totalEstimasiBU],
-                        backgroundColor: [
-                            'rgba(168, 85, 247, 0.7)', // Purple lighter
-                            'rgba(249, 115, 22, 0.7)', // Orange lighter
-                        ],
-                        borderColor: ['#ffffff'],
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: { 
-                        legend: { position: 'bottom' },
-                         tooltip: {
-                             callbacks: { label: context => `${context.label}: Rp ${formatCurrency(context.raw)}` }
+            const budgetTypeCanvas = document.getElementById('budgetTypeChart'); // Get canvas element
+             if (budgetTypeCanvas) { // Check if canvas exists
+                 const budgetTypeCtx = budgetTypeCanvas.getContext('2d');
+                 if (budgetTypeChart) budgetTypeChart.destroy();
+                 // Only render chart if there's data to show
+                if (totalEstimasiBBM > 0 || totalEstimasiBU > 0) {
+                     budgetTypeChart = new Chart(budgetTypeCtx, {
+                        type: 'pie',
+                        data: {
+                            labels: ['BBM (Beban Barang Modal)', 'BU (Beban Usaha)'],
+                            datasets: [{
+                                data: [totalEstimasiBBM, totalEstimasiBU],
+                                backgroundColor: [
+                                    'rgba(168, 85, 247, 0.7)', // Purple lighter
+                                    'rgba(249, 115, 22, 0.7)', // Orange lighter
+                                ],
+                                borderColor: ['#ffffff'],
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { 
+                                legend: { position: 'bottom' },
+                                tooltip: {
+                                    callbacks: { label: context => `${context.label}: ${formatCurrency(context.raw)}` } // Use formatCurrency
+                                }
+                            }
                         }
-                    }
+                    });
+                } else {
+                     // Optionally display a message if no data
+                    const ctx = budgetTypeCtx; // Use the context directly
+                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); // Clear previous drawing
+                    ctx.font = "14px Arial";
+                    ctx.fillStyle = "#9ca3af";
+                    ctx.textAlign = "center";
+                    ctx.fillText("Tidak ada data estimasi anggaran.", ctx.canvas.width / 2, ctx.canvas.height / 2);
                 }
-            });
+            } else {
+                 console.error("Canvas element with ID 'budgetTypeChart' not found.");
+            }
 
 
             // Upcoming RKAP List
@@ -847,6 +893,12 @@
                 
                 const jenisAnggaranDisplay = rkap.jenisAnggaran ? `<span class="text-xs font-semibold ${rkap.jenisAnggaran === 'BBM' ? 'text-purple-600' : 'text-orange-600'}">(${rkap.jenisAnggaran})</span>` : '';
 
+                // Calculate Sisa Anggaran
+                const estimasi = rkap.estimasiAnggaran || 0;
+                const realisasi = rkap.realisasiAnggaran || 0;
+                const sisaAnggaran = estimasi - realisasi;
+                const sisaAnggaranClass = sisaAnggaran >= 0 ? 'sisa-anggaran-positif' : 'sisa-anggaran-negatif';
+
                 card.innerHTML = `
                     <div class="flex justify-between items-start">
                          <h3 class="font-bold text-gray-800 mb-4 flex-1">${rkap.title} ${jenisAnggaranDisplay}</h3>
@@ -885,14 +937,20 @@
                             </select>
                             <div id="account-details-${rkap.id}">${accountDetailsHtml}</div> 
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start"> <!-- Changed to 3 cols -->
                              <div>
                                 <label for="estimasi-${rkap.id}" class="block text-sm font-medium text-gray-600 mb-1">Estimasi Anggaran (Rp)</label>
-                                <input type="text" id="estimasi-${rkap.id}" data-rkap-id="${rkap.id}" data-field="estimasiAnggaran" value="${formatCurrency(rkap.estimasiAnggaran || 0)}" class="rkap-budget-input text-right w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="estimasi-${rkap.id}" data-rkap-id="${rkap.id}" data-field="estimasiAnggaran" value="${formatCurrency(estimasi)}" class="rkap-budget-input text-right w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
                                 <label for="realisasi-${rkap.id}" class="block text-sm font-medium text-gray-600 mb-1">Realisasi Anggaran (Rp)</label>
-                                <input type="text" id="realisasi-${rkap.id}" data-rkap-id="${rkap.id}" data-field="realisasiAnggaran" value="${formatCurrency(rkap.realisasiAnggaran || 0)}" class="rkap-budget-input text-right w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="realisasi-${rkap.id}" data-rkap-id="${rkap.id}" data-field="realisasiAnggaran" value="${formatCurrency(realisasi)}" class="rkap-budget-input text-right w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                             <div class="mt-1 md:mt-0"> <!-- Added div for Sisa Anggaran -->
+                                <label class="block text-sm font-medium text-gray-600 mb-1">Sisa Anggaran (Rp)</label>
+                                <p class="text-right w-full p-2 border border-gray-200 rounded-md bg-gray-50 font-semibold ${sisaAnggaranClass}">
+                                    ${formatCurrency(sisaAnggaran)}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -1085,6 +1143,8 @@
             if (rkapItem) {
                 rkapItem[field] = parseCurrency(event.target.value);
                 await saveData();
+                 // Re-render RKAPs is needed if using Firestore to update Sisa Anggaran display
+                if (isOnlineMode) renderRKAPs();
             }
         }
 
