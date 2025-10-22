@@ -7,7 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
+        /* ... existing styles ... */
         body {
             font-family: 'Inter', sans-serif;
         }
@@ -70,8 +73,22 @@
             color: #2563eb; /* blue-600 */
             border-bottom: 2px solid #2563eb;
         }
+         .subtab-button.active {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+        }
+        .subtab-button {
+             background-color: #e5e7eb; /* gray-200 */
+             color: #374151; /* gray-700 */
+             transition: background-color 0.2s, color 0.2s;
+        }
+        .subtab-button:hover {
+            background-color: #d1d5db; /* gray-300 */
+        }
+
         .tab-button {
              border-bottom: 2px solid transparent;
+             white-space: nowrap; /* Prevent tab text wrapping */
         }
         .delete-icon {
             color: #9ca3af;
@@ -79,6 +96,13 @@
         }
         .delete-icon:hover {
             color: #ef4444; /* red-500 */
+        }
+        .edit-icon {
+             color: #9ca3af;
+             transition: color 0.2s ease-in-out;
+        }
+        .edit-icon:hover {
+             color: #f59e0b; /* amber-500 */
         }
         /* Modal Styles */
         .modal-overlay {
@@ -94,6 +118,36 @@
         }
         .sop-link-tag {
             cursor: pointer;
+        }
+        /* Table Styles */
+        th, td {
+            padding: 0.75rem; /* p-3 */
+            text-align: left;
+        }
+         /* Action Button Style */
+        .action-btn {
+            background-color: #10b981; /* emerald-500 */
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem; /* rounded-lg */
+            font-weight: bold;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+        .action-btn:hover {
+            background-color: #059669; /* emerald-600 */
+        }
+        .action-btn.secondary {
+             background-color: #64748b; /* slate-500 */
+        }
+         .action-btn.secondary:hover {
+             background-color: #475569; /* slate-600 */
+        }
+        .account-details {
+            font-size: 0.8rem;
+            color: #6b7280; /* gray-500 */
+            margin-top: 0.25rem;
         }
     </style>
 </head>
@@ -127,18 +181,19 @@
             </div>
 
             <!-- Navigasi Tab -->
-            <nav class="mt-6 border-b border-gray-200">
+            <nav class="mt-6 border-b border-gray-200 overflow-x-auto">
                 <div class="flex space-x-1">
                     <button id="tab-dashboard" class="tab-button active py-3 px-4 font-semibold text-sm">Dashboard</button>
                     <button id="tab-sop" class="tab-button py-3 px-4 font-semibold text-gray-500 hover:text-gray-700 text-sm">SOP Checklist</button>
                     <button id="tab-rkap" class="tab-button py-3 px-4 font-semibold text-gray-500 hover:text-gray-700 text-sm">RKAP</button>
+                    <button id="tab-anggaran-list" class="tab-button py-3 px-4 font-semibold text-gray-500 hover:text-gray-700 text-sm">Anggaran List</button> <!-- Renamed Tab -->
                 </div>
             </nav>
         </header>
 
         <!-- Konten Halaman Dashboard -->
         <div id="dashboard-page">
-            <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex justify-end items-center">
+             <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex justify-end items-center">
                  <div class="flex items-center space-x-4">
                     <label for="dashboard-year-filter" class="font-semibold text-sm">Filter Tahun RKAP:</label>
                     <select id="dashboard-year-filter" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></select>
@@ -156,7 +211,7 @@
                 <div class="bg-white p-6 rounded-xl shadow-sm flex items-center space-x-4">
                     <div class="bg-green-100 p-3 rounded-full"><i class="fas fa-tasks text-xl text-green-500"></i></div>
                     <div>
-                        <p id="stat-rkap-year-label" class="text-gray-500 text-sm">Program RKAP (2025)</p>
+                        <p id="stat-rkap-year-label" class="text-gray-500 text-sm">Program RKAP (Semua)</p>
                         <p id="stat-total-rkap" class="text-2xl font-bold">0</p>
                     </div>
                 </div>
@@ -173,8 +228,14 @@
                 <!-- Main Content (Charts) -->
                 <div class="lg:col-span-3 space-y-6">
                      <div class="bg-white p-6 rounded-xl shadow-sm">
-                        <h3 class="font-bold text-lg mb-4">Anggaran RKAP (<span id="budget-chart-year">2025</span>)</h3>
+                        <h3 class="font-bold text-lg mb-4">Anggaran RKAP (<span id="budget-chart-year">Semua</span>)</h3>
                         <canvas id="budgetChart"></canvas>
+                    </div>
+                     <div class="bg-white p-6 rounded-xl shadow-sm">
+                        <h3 class="font-bold text-lg mb-4 text-center">Komposisi Estimasi Anggaran (<span id="budget-type-chart-year">Semua</span>)</h3>
+                        <div class="max-w-[250px] mx-auto">
+                           <canvas id="budgetTypeChart"></canvas> <!-- New Pie Chart -->
+                        </div>
                     </div>
                 </div>
                 <!-- Sidebar (Donut chart & Lists) -->
@@ -209,7 +270,10 @@
                     <input type="search" id="sop-search-input" placeholder="Cari SOP..." class="w-full p-2 pl-10 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
                     <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 </div>
-                <button id="add-sop-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow transition-transform transform hover:scale-105">
+                 <button id="export-sop-btn" class="action-btn">
+                    <i class="fas fa-file-excel mr-2"></i>Export Excel
+                </button>
+                <button id="add-sop-btn" class="action-btn secondary">
                     <i class="fas fa-plus mr-2"></i>Tambah SOP
                 </button>
              </div>
@@ -236,14 +300,63 @@
                     <input type="search" id="rkap-search-input" placeholder="Cari RKAP..." class="w-full p-2 pl-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                     <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 </div>
-                <button id="add-rkap-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow transition-transform transform hover:scale-105">
+                 <button id="export-rkap-btn" class="action-btn">
+                     <i class="fas fa-file-excel mr-2"></i>Export Excel
+                </button>
+                <button id="add-rkap-btn" class="action-btn secondary">
                     <i class="fas fa-plus mr-2"></i>Tambah RKAP
                 </button>
+            </div>
+            <!-- Sub Tabs RKAP -->
+            <div class="mb-4 flex space-x-1 border-b border-gray-200">
+                <button data-filter="all" class="rkap-filter-btn subtab-button active px-4 py-2 rounded-t-lg text-sm font-semibold">Semua</button>
+                <button data-filter="BBM" class="rkap-filter-btn subtab-button px-4 py-2 rounded-t-lg text-sm font-semibold">BBM</button>
+                <button data-filter="BU" class="rkap-filter-btn subtab-button px-4 py-2 rounded-t-lg text-sm font-semibold">BU</button>
             </div>
             <main id="rkap-list" class="space-y-4">
                 <!-- RKAP items will be injected here -->
             </main>
         </div>
+        
+        <!-- Konten Halaman Anggaran List -->
+        <div id="anggaran-list-page" class="hidden"> <!-- Renamed Page ID -->
+             <div class="mb-4 flex flex-wrap gap-4 items-center">
+                 <div class="flex-grow relative">
+                    <input type="search" id="al-search-input" placeholder="Cari Akun..." class="w-full p-2 pl-10 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"> <!-- Renamed Search ID -->
+                    <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                </div>
+                <!-- File Input for Upload -->
+                <input type="file" id="al-upload-input" accept=".xlsx, .xls" class="hidden"> <!-- Renamed Upload ID -->
+                <label for="al-upload-input" class="action-btn secondary cursor-pointer">
+                     <i class="fas fa-upload mr-2"></i>Upload Excel
+                </label>
+                 <button id="export-al-btn" class="action-btn"> <!-- Renamed Export ID -->
+                    <i class="fas fa-file-excel mr-2"></i>Export Excel
+                </button>
+                <button id="add-al-btn" class="action-btn secondary"> <!-- Renamed Add ID -->
+                    <i class="fas fa-plus mr-2"></i>Tambah Data Akun
+                </button>
+             </div>
+             <p class="text-xs text-gray-500 mb-4">Pastikan file Excel memiliki header: 'No Akun Lama', 'Nama Akun Lama', 'No Akun Baru', 'Nama Akun Baru', 'Jenis Anggaran' di sheet pertama.</p>
+             <div class="bg-white rounded-xl shadow-sm overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No. Akun Lama</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Akun Lama</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No. Akun Baru</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Akun Baru</th>
+                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jenis Anggaran</th> <!-- Added Column -->
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="al-table-body" class="bg-white divide-y divide-gray-200"> <!-- Renamed Table Body ID -->
+                        <!-- Data rows will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
 
         <footer class="text-center mt-12 text-gray-500 text-sm">
             <p>&copy; 2025 Divisi IT. Aplikasi Checklist & RKAP.</p>
@@ -256,7 +369,7 @@
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- KONFIGURASI DAN DATA ---
-        const DATA_VERSION = '2.3'; // Versi data untuk mendeteksi pembaruan
+        const DATA_VERSION = '3.2'; // Version update for RKAP budget account linking
         const LOCAL_STORAGE_KEY = 'itChecklistRkapData';
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'it-checklist-rkap-app';
         let firebaseConfig;
@@ -301,40 +414,55 @@
         }));
 
         const initialRkapData = [
-             { id: 'rkap-1667826000000', year: 2026, title: 'Peremajaan Laptop', targetDate: '', relatedSop: [], estimasiAnggaran: 0, realisasiAnggaran: 0 },
-             { id: 'rkap-1667826000001', year: 2026, title: 'Pengembangan Aplikasi Core and Support System', targetDate: '', relatedSop: [], estimasiAnggaran: 0, realisasiAnggaran: 0 },
-             { id: 'rkap-1667826000002', year: 2026, title: 'Pengembangan Aplikasi ERM', targetDate: '', relatedSop: [], estimasiAnggaran: 0, realisasiAnggaran: 0 },
+             { id: 'rkap-1667826000000', year: 2026, title: 'Peremajaan Laptop', targetDate: '', realisasiTanggal: '', relatedSop: [], estimasiAnggaran: 0, realisasiAnggaran: 0, jenisAnggaran: 'BBM', anggaranId: '' }, // Added anggaranId
+             { id: 'rkap-1667826000001', year: 2026, title: 'Pengembangan Aplikasi Core and Support System', targetDate: '', realisasiTanggal: '', relatedSop: [], estimasiAnggaran: 0, realisasiAnggaran: 0, jenisAnggaran: 'BU', anggaranId: '' }, // Added anggaranId
+             { id: 'rkap-1667826000002', year: 2026, title: 'Pengembangan Aplikasi ERM', targetDate: '', realisasiTanggal: '', relatedSop: [], estimasiAnggaran: 0, realisasiAnggaran: 0, jenisAnggaran: 'BU', anggaranId: '' }, // Added anggaranId
+        ];
+
+        const initialAnggaranListData = [ // Renamed data
+            // Example data
+            // { id: 'al-1', oldAccNum: '123', oldAccName: 'Biaya Lama', newAccNum: '456', newAccName: 'Biaya Baru', jenisAnggaran: 'BBM' }
         ];
         
         // --- VARIABEL GLOBAL ---
-        let state = { sopData: [], rkapData: [] };
+        let state = { sopData: [], rkapData: [], anggaranListData: [] }; // Renamed state property
         let db, auth;
         let userId = null;
         let unsubscribe = null;
         let isOnlineMode = false;
         let currentRkapYear;
+        let currentRkapFilter = 'all'; // Filter for RKAP sub-tabs (all, BBM, BU)
         let sopFilterId = null;
         let sopSearchTerm = '';
         let rkapSearchTerm = '';
-        let sopProgressChart, budgetChart;
+        let alSearchTerm = ''; // Renamed search term
+        let sopProgressChart, budgetChart, budgetTypeChart; // Added budgetTypeChart
         let dashboardFilterYear = 'all';
 
         // --- ELEMEN DOM ---
         const sopListContainer = document.getElementById('sop-list');
         const rkapListContainer = document.getElementById('rkap-list');
+        const alTableBody = document.getElementById('al-table-body'); // Renamed Table Body ID
         const overallProgressBar = document.getElementById('overall-progress-bar');
         const overallProgressText = document.getElementById('overall-progress-text');
         const loadingOverlay = document.getElementById('loading-overlay');
         const tabDashboard = document.getElementById('tab-dashboard');
         const tabSop = document.getElementById('tab-sop');
         const tabRkap = document.getElementById('tab-rkap');
+        const tabAl = document.getElementById('tab-anggaran-list'); // Renamed Tab ID
         const dashboardPage = document.getElementById('dashboard-page');
         const sopPage = document.getElementById('sop-page');
         const rkapPage = document.getElementById('rkap-page');
+        const alPage = document.getElementById('anggaran-list-page'); // Renamed Page ID
         const rkapYearSelector = document.getElementById('rkap-year-selector');
         const dashboardYearFilter = document.getElementById('dashboard-year-filter');
         const addRkapBtn = document.getElementById('add-rkap-btn');
         const addSopBtn = document.getElementById('add-sop-btn');
+        const addAlBtn = document.getElementById('add-al-btn'); // Renamed Add ID
+        const alUploadInput = document.getElementById('al-upload-input'); // Renamed Upload ID
+        const exportSopBtn = document.getElementById('export-sop-btn');
+        const exportRkapBtn = document.getElementById('export-rkap-btn');
+        const exportAlBtn = document.getElementById('export-al-btn'); // Renamed Export ID
         const modal = document.getElementById('modal');
         const modalContainer = document.querySelector('.modal-container');
         const sopFilterContainer = document.getElementById('sop-filter-container');
@@ -342,6 +470,8 @@
         const clearSopFilterBtn = document.getElementById('clear-sop-filter-btn');
         const sopSearchInput = document.getElementById('sop-search-input');
         const rkapSearchInput = document.getElementById('rkap-search-input');
+        const alSearchInput = document.getElementById('al-search-input'); // Renamed Search ID
+        const rkapFilterBtns = document.querySelectorAll('.rkap-filter-btn'); // RKAP Filter Buttons
 
         // --- FUNGSI HELPER ---
         function formatCurrency(value) {
@@ -352,6 +482,27 @@
         function parseCurrency(value) {
             return Number(String(value).replace(/[^0-9]/g, ''));
         }
+        
+        function getCurrentDateString() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+        
+        function exportToExcel(data, filename, sheetname = 'Sheet1') {
+            try {
+                const worksheet = XLSX.utils.json_to_sheet(data);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, sheetname);
+                XLSX.writeFile(workbook, `${filename}_${getCurrentDateString()}.xlsx`);
+            } catch (error) {
+                console.error("Error exporting to Excel:", error);
+                showSimpleModal('Error', `Gagal mengekspor data ke Excel: ${error.message}`);
+            }
+        }
+
 
         // --- FUNGSI MODAL ---
         function showModal(config) {
@@ -364,7 +515,8 @@
                 button.textContent = btnConfig.label;
                 button.className = btnConfig.classes;
                 button.onclick = () => {
-                    if(btnConfig.onClick) btnConfig.onClick();
+                    const modalBodyElement = document.getElementById('modal-body');
+                    if (btnConfig.onClick) btnConfig.onClick(modalBodyElement);
                     hideModal();
                 };
                 footer.appendChild(button);
@@ -372,6 +524,15 @@
             modal.classList.remove('opacity-0', 'pointer-events-none');
             modalContainer.classList.remove('scale-95', 'opacity-0');
         }
+        
+        function showSimpleModal(title, message) {
+             showModal({
+                title: title,
+                body: `<p>${message}</p>`,
+                buttons: [{ label: 'OK', classes: 'action-btn secondary' }]
+            });
+        }
+
 
         function hideModal() {
             modal.classList.add('opacity-0');
@@ -384,10 +545,11 @@
             renderDashboard();
             renderSOPs();
             renderRKAPs();
+            renderAnggaranList(); // Renamed Render Function
         }
 
         function renderDashboard() {
-            let rkapDataForDashboard = state.rkapData;
+             let rkapDataForDashboard = state.rkapData;
             const yearLabel = dashboardFilterYear === 'all' ? 'Semua Tahun' : dashboardFilterYear;
 
             if (dashboardFilterYear !== 'all') {
@@ -431,27 +593,41 @@
             const budgetChartCtx = document.getElementById('budgetChart').getContext('2d');
             const totalEstimasi = rkapDataForDashboard.reduce((sum, rkap) => sum + (rkap.estimasiAnggaran || 0), 0);
             const totalRealisasi = rkapDataForDashboard.reduce((sum, rkap) => sum + (rkap.realisasiAnggaran || 0), 0);
+            const totalEstimasiBBM = rkapDataForDashboard.filter(r => r.jenisAnggaran === 'BBM').reduce((sum, rkap) => sum + (rkap.estimasiAnggaran || 0), 0);
+            const totalRealisasiBBM = rkapDataForDashboard.filter(r => r.jenisAnggaran === 'BBM').reduce((sum, rkap) => sum + (rkap.realisasiAnggaran || 0), 0);
+            const totalEstimasiBU = rkapDataForDashboard.filter(r => r.jenisAnggaran === 'BU').reduce((sum, rkap) => sum + (rkap.estimasiAnggaran || 0), 0);
+            const totalRealisasiBU = rkapDataForDashboard.filter(r => r.jenisAnggaran === 'BU').reduce((sum, rkap) => sum + (rkap.realisasiAnggaran || 0), 0);
+
             if(budgetChart) budgetChart.destroy();
             budgetChart = new Chart(budgetChartCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Anggaran'],
-                    datasets: [{
-                        label: 'Estimasi',
-                        data: [totalEstimasi],
-                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                    }, {
-                        label: 'Realisasi',
-                        data: [totalRealisasi],
-                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                    }]
+                    labels: ['Estimasi', 'Realisasi'], // Separate labels for clarity
+                    datasets: [
+                        {
+                            label: 'BBM',
+                            data: [totalEstimasiBBM, totalRealisasiBBM],
+                            backgroundColor: 'rgba(168, 85, 247, 0.6)', // Purple
+                            borderColor: 'rgba(168, 85, 247, 1)',
+                            borderWidth: 1
+                        }, 
+                        {
+                            label: 'BU',
+                            data: [totalEstimasiBU, totalRealisasiBU],
+                            backgroundColor: 'rgba(249, 115, 22, 0.6)', // Orange
+                            borderColor: 'rgba(249, 115, 22, 1)',
+                            borderWidth: 1
+                        }
+                    ]
                 },
                 options: {
                     scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { callback: value => 'Rp ' + formatCurrency(value) }
-                        }
+                         x: { stacked: false }, // Bars side-by-side
+                         y: { 
+                             stacked: false,
+                             beginAtZero: true,
+                             ticks: { callback: value => 'Rp ' + formatCurrency(value) }
+                         }
                     },
                     plugins: {
                         tooltip: {
@@ -460,10 +636,42 @@
                     }
                 }
             });
+            
+             // Budget Type Pie Chart (Estimasi)
+            document.getElementById('budget-type-chart-year').textContent = yearLabel;
+            const budgetTypeCtx = document.getElementById('budgetTypeChart').getContext('2d');
+            if (budgetTypeChart) budgetTypeChart.destroy();
+            budgetTypeChart = new Chart(budgetTypeCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['BBM (Beban Barang Modal)', 'BU (Beban Usaha)'],
+                    datasets: [{
+                        data: [totalEstimasiBBM, totalEstimasiBU],
+                        backgroundColor: [
+                            'rgba(168, 85, 247, 0.7)', // Purple lighter
+                            'rgba(249, 115, 22, 0.7)', // Orange lighter
+                        ],
+                        borderColor: ['#ffffff'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { 
+                        legend: { position: 'bottom' },
+                         tooltip: {
+                             callbacks: { label: context => `${context.label}: Rp ${formatCurrency(context.raw)}` }
+                        }
+                    }
+                }
+            });
+
 
             // Upcoming RKAP List
             const upcomingRkapList = document.getElementById('upcoming-rkap-list');
             upcomingRkapList.innerHTML = '';
+            // Use rkapDataForDashboard here as well
             const upcomingRkaps = rkapDataForDashboard
                 .filter(r => r.targetDate && new Date(r.targetDate) >= new Date())
                 .sort((a,b) => new Date(a.targetDate) - new Date(b.targetDate))
@@ -573,6 +781,12 @@
             rkapListContainer.innerHTML = '';
             let filteredRkaps = state.rkapData.filter(r => r.year == currentRkapYear);
 
+            // Apply BBM/BU filter
+            if (currentRkapFilter !== 'all') {
+                filteredRkaps = filteredRkaps.filter(r => r.jenisAnggaran === currentRkapFilter);
+            }
+
+            // Apply search term filter
             if (rkapSearchTerm) {
                 const lowercasedTerm = rkapSearchTerm.toLowerCase();
                 filteredRkaps = filteredRkaps.filter(rkap => 
@@ -581,7 +795,12 @@
             }
 
             if (filteredRkaps.length === 0) {
-                rkapListContainer.innerHTML = `<div class="bg-white p-6 rounded-lg shadow-sm text-center text-gray-500"><p>Tidak ada data RKAP untuk tahun ${currentRkapYear}.</p></div>`;
+                let message = `Tidak ada data RKAP untuk tahun ${currentRkapYear}`;
+                if (currentRkapFilter !== 'all') {
+                    message += ` dengan jenis anggaran ${currentRkapFilter}`;
+                }
+                message += '.';
+                rkapListContainer.innerHTML = `<div class="bg-white p-6 rounded-lg shadow-sm text-center text-gray-500"><p>${message}</p></div>`;
                 return;
             }
 
@@ -607,32 +826,64 @@
                 
                 let buttonText = relatedSops.length > 0 ? `${relatedSops.length} SOP terpilih` : 'Pilih SOP Terkait';
                 
+                // --- Anggaran Account Dropdown ---
+                let anggaranOptions = '<option value="">Pilih Akun Anggaran</option>';
+                state.anggaranListData.forEach(item => {
+                    anggaranOptions += `<option value="${item.id}" ${rkap.anggaranId === item.id ? 'selected' : ''}>${item.newAccNum} - ${item.newAccName} (${item.jenisAnggaran})</option>`;
+                });
+
+                // Display Selected Account Details
+                let accountDetailsHtml = '';
+                const selectedAccount = state.anggaranListData.find(item => item.id === rkap.anggaranId);
+                if (selectedAccount) {
+                    accountDetailsHtml = `
+                        <div class="account-details">
+                            <p><strong>Akun Lama:</strong> ${selectedAccount.oldAccNum || '-'} / ${selectedAccount.oldAccName || '-'}</p>
+                            <p><strong>Akun Baru:</strong> ${selectedAccount.newAccNum || '-'} / ${selectedAccount.newAccName || '-'}</p>
+                        </div>
+                    `;
+                }
+                // ------------------------------------
+                
+                const jenisAnggaranDisplay = rkap.jenisAnggaran ? `<span class="text-xs font-semibold ${rkap.jenisAnggaran === 'BBM' ? 'text-purple-600' : 'text-orange-600'}">(${rkap.jenisAnggaran})</span>` : '';
+
                 card.innerHTML = `
                     <div class="flex justify-between items-start">
-                         <h3 class="font-bold text-gray-800 mb-4 flex-1">${rkap.title}</h3>
+                         <h3 class="font-bold text-gray-800 mb-4 flex-1">${rkap.title} ${jenisAnggaranDisplay}</h3>
                          <button class="delete-rkap-btn p-2" data-rkap-id="${rkap.id}" title="Hapus RKAP"><i class="fas fa-trash-alt delete-icon"></i></button>
                     </div>
                     <div class="space-y-4">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                            <div>
-                                <label for="date-${rkap.id}" class="block text-sm font-medium text-gray-600 mb-1">Target Estimasi Penyelesaian</label>
-                                <input type="date" id="date-${rkap.id}" data-rkap-id="${rkap.id}" data-field="targetDate" value="${rkap.targetDate || ''}" class="rkap-date-input w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                             <div>
+                                <label for="targetDate-${rkap.id}" class="block text-sm font-medium text-gray-600 mb-1">Target Penyelesaian</label>
+                                <input type="date" id="targetDate-${rkap.id}" data-rkap-id="${rkap.id}" data-field="targetDate" value="${rkap.targetDate || ''}" class="rkap-date-input w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-600 mb-1">Tautan ke SOP</label>
-                                <div class="relative" data-rkap-id="${rkap.id}">
-                                    <button class="sop-multiselect-toggle w-full p-2 bg-white border border-gray-300 rounded-md shadow-sm text-left flex justify-between items-center">
-                                        <span>${buttonText}</span>
-                                        <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
-                                    </button>
-                                    <div class="sop-multiselect-options hidden absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
-                                        ${sopCheckboxOptions}
-                                    </div>
-                                </div>
-                                <div class="sop-tags-container mt-2 flex flex-wrap gap-1">
-                                    ${sopTags}
+                             <div>
+                                <label for="realisasiTanggal-${rkap.id}" class="block text-sm font-medium text-gray-600 mb-1">Realisasi Penyelesaian</label>
+                                <input type="date" id="realisasiTanggal-${rkap.id}" data-rkap-id="${rkap.id}" data-field="realisasiTanggal" value="${rkap.realisasiTanggal || ''}" class="rkap-date-input w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                        <div> 
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Tautan ke SOP</label>
+                            <div class="relative" data-rkap-id="${rkap.id}">
+                                <button class="sop-multiselect-toggle w-full p-2 bg-white border border-gray-300 rounded-md shadow-sm text-left flex justify-between items-center">
+                                    <span>${buttonText}</span>
+                                    <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
+                                </button>
+                                <div class="sop-multiselect-options hidden absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
+                                    ${sopCheckboxOptions}
                                 </div>
                             </div>
+                            <div class="sop-tags-container mt-2 flex flex-wrap gap-1">
+                                ${sopTags}
+                            </div>
+                        </div>
+                         <div>
+                            <label for="anggaran-${rkap.id}" class="block text-sm font-medium text-gray-600 mb-1">Akun Anggaran</label>
+                            <select id="anggaran-${rkap.id}" data-rkap-id="${rkap.id}" data-field="anggaranId" class="rkap-anggaran-select w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                ${anggaranOptions}
+                            </select>
+                            <div id="account-details-${rkap.id}">${accountDetailsHtml}</div> 
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                              <div>
@@ -651,9 +902,48 @@
             addRkapEventListeners();
         }
 
+        function renderAnggaranList() { // Renamed Function
+            alTableBody.innerHTML = ''; // Use renamed ID
+            let filteredAl = state.anggaranListData; // Use renamed state
+
+            if (alSearchTerm) { // Use renamed search term
+                const lowercasedTerm = alSearchTerm.toLowerCase();
+                filteredAl = filteredAl.filter(item => 
+                    item.oldAccNum.toLowerCase().includes(lowercasedTerm) ||
+                    item.oldAccName.toLowerCase().includes(lowercasedTerm) ||
+                    item.newAccNum.toLowerCase().includes(lowercasedTerm) ||
+                    item.newAccName.toLowerCase().includes(lowercasedTerm) ||
+                    (item.jenisAnggaran && item.jenisAnggaran.toLowerCase().includes(lowercasedTerm)) // Search jenisAnggaran
+                );
+            }
+
+            if (filteredAl.length === 0) {
+                 alTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-4">Tidak ada data akun.</td></tr>`; // Increased colspan
+                 return;
+            }
+
+            filteredAl.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.oldAccNum}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.oldAccName}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.newAccNum}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.newAccName}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.jenisAnggaran || '-'}</td> <!-- Display jenisAnggaran -->
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        <button class="edit-al-btn text-indigo-600 hover:text-indigo-900" data-al-id="${item.id}" title="Edit"><i class="fas fa-edit edit-icon"></i></button> <!-- Renamed button class/data-* -->
+                        <button class="delete-al-btn text-red-600 hover:text-red-900" data-al-id="${item.id}" title="Hapus"><i class="fas fa-trash-alt delete-icon"></i></button> <!-- Renamed button class/data-* -->
+                    </td>
+                `;
+                alTableBody.appendChild(row);
+            });
+
+            addAlEventListeners(); // Use renamed function
+        }
+
         // --- FUNGSI KALKULASI & UPDATE UI ---
         function calculateSOPProgress(sop) {
-            if (sop.documents.length === 0) return 100;
+            if (!sop || !sop.documents || sop.documents.length === 0) return 100;
             const checkedDocs = sop.documents.filter(d => d.checked).length;
             return Math.round((checkedDocs / sop.documents.length) * 100);
         }
@@ -691,8 +981,11 @@
         }
         
         function addRkapEventListeners() {
-            rkapListContainer.querySelectorAll('.rkap-date-input').forEach(element => {
+            rkapListContainer.querySelectorAll('.rkap-date-input').forEach(element => { // Includes both date inputs now
                 element.addEventListener('change', handleRkapDateChange);
+            });
+             rkapListContainer.querySelectorAll('.rkap-anggaran-select').forEach(element => { // Listener for Anggaran Account dropdown
+                element.addEventListener('change', handleRkapAnggaranChange);
             });
             rkapListContainer.querySelectorAll('.rkap-budget-input').forEach(input => {
                 input.addEventListener('input', handleBudgetInputFormatting);
@@ -715,6 +1008,16 @@
             });
         }
         
+         function addAlEventListeners() { // Renamed function
+            alTableBody.querySelectorAll('.edit-al-btn').forEach(button => { // Renamed class
+                button.addEventListener('click', handleEditAlClick); // Renamed handler
+            });
+            alTableBody.querySelectorAll('.delete-al-btn').forEach(button => { // Renamed class
+                button.addEventListener('click', handleDeleteAlClick); // Renamed handler
+            });
+        }
+
+        // --- EVENT HANDLERS ---
         function handleSopLinkClick(event) {
             event.preventDefault();
             sopFilterId = event.currentTarget.dataset.sopId;
@@ -734,11 +1037,35 @@
             }
         }
         
-        async function handleRkapDateChange(event) {
+        async function handleRkapDateChange(event) { // Handles both targetDate and realisasiTanggal
             const { rkapId, field } = event.target.dataset;
             const rkapItem = state.rkapData.find(r => r.id === rkapId);
             if (rkapItem) {
                 rkapItem[field] = event.target.value;
+                await saveData();
+            }
+        }
+
+         async function handleRkapAnggaranChange(event) { // Handles Anggaran Account selection
+            const { rkapId, field } = event.target.dataset;
+            const rkapItem = state.rkapData.find(r => r.id === rkapId);
+            if (rkapItem) {
+                rkapItem[field] = event.target.value; // Save the selected Anggaran List ID
+                
+                // Update the details display immediately
+                const detailsDiv = document.getElementById(`account-details-${rkapId}`);
+                 let accountDetailsHtml = '';
+                const selectedAccount = state.anggaranListData.find(item => item.id === rkapItem.anggaranId);
+                if (selectedAccount) {
+                    accountDetailsHtml = `
+                        <div class="account-details">
+                            <p><strong>Akun Lama:</strong> ${selectedAccount.oldAccNum || '-'} / ${selectedAccount.oldAccName || '-'}</p>
+                            <p><strong>Akun Baru:</strong> ${selectedAccount.newAccNum || '-'} / ${selectedAccount.newAccName || '-'}</p>
+                        </div>
+                    `;
+                }
+                 if(detailsDiv) detailsDiv.innerHTML = accountDetailsHtml;
+
                 await saveData();
             }
         }
@@ -747,7 +1074,6 @@
             const input = event.target;
             const value = parseCurrency(input.value);
             const formattedValue = formatCurrency(value);
-            // To maintain cursor position, we only update if value changed
             if (input.value !== formattedValue) {
                 input.value = formattedValue;
             }
@@ -788,7 +1114,6 @@
             const rkapId = event.currentTarget.dataset.rkapId;
             const rkapItem = state.rkapData.find(r => r.id === rkapId);
             if(!rkapItem) return;
-
             showModal({
                 title: 'Konfirmasi Penghapusan',
                 body: `<p>Apakah Anda yakin ingin menghapus RKAP: <strong class="font-semibold">${rkapItem.title}</strong>?</p>`,
@@ -807,7 +1132,7 @@
         }
         
         function handleDeleteSopClick(event) {
-            event.stopPropagation();
+            event.stopPropagation(); // Prevent accordion toggle
             const sopId = event.currentTarget.dataset.sopId;
             const sop = state.sopData.find(s => s.id === sopId);
             if (!sop) return;
@@ -869,22 +1194,19 @@
         }
         
         function handleAttachmentClick(event) {
-            const { sopId, docId } = event.currentTarget.dataset;
+             const { sopId, docId } = event.currentTarget.dataset;
             const sop = state.sopData.find(s => s.id === sopId);
             const doc = sop?.documents.find(d => d.id == docId);
             if (!doc) return;
 
             const hasAttachment = doc.attachment && doc.attachment.trim() !== '';
-            if (hasAttachment) {
-                window.open(doc.attachment, '_blank');
-                return;
-            }
-
+            
             showModal({
-                title: 'Tambah Lampiran',
+                title: hasAttachment ? 'Edit Lampiran' : 'Tambah Lampiran',
                 body: `
                     <label for="attachment-url" class="block text-sm font-medium text-gray-700">URL Lampiran</label>
-                    <input type="text" id="attachment-url" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="https://...">
+                    <input type="text" id="attachment-url" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="https://..." value="${doc.attachment || ''}">
+                    ${hasAttachment ? '<button id="remove-attachment-btn" class="mt-2 text-sm text-red-600 hover:text-red-800">Hapus Lampiran</button>' : ''}
                 `,
                 buttons: [
                     { label: 'Batal', classes: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg' },
@@ -893,15 +1215,224 @@
                         classes: 'bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg',
                         onClick: async () => {
                             const newUrl = document.getElementById('attachment-url').value;
-                            if (newUrl) {
-                                doc.attachment = newUrl.trim();
+                            doc.attachment = newUrl.trim();
+                            await saveData();
+                        }
+                    }
+                ]
+            });
+            
+             if (hasAttachment) {
+                document.getElementById('remove-attachment-btn').onclick = async () => {
+                     doc.attachment = '';
+                     await saveData();
+                     hideModal();
+                };
+            }
+            setTimeout(() => document.getElementById('attachment-url').focus(), 100);
+        }
+
+        // --- Anggaran List Event Handlers ---
+        function handleAddAlClick() { // Renamed handler
+            showAlModal(); // Renamed modal function
+        }
+
+        function handleEditAlClick(event) { // Renamed handler
+            const alId = event.currentTarget.dataset.alId; // Renamed data-*
+            const item = state.anggaranListData.find(i => i.id === alId);
+            if (item) {
+                showAlModal(item); // Renamed modal function
+            }
+        }
+
+        function handleDeleteAlClick(event) { // Renamed handler
+            const alId = event.currentTarget.dataset.alId; // Renamed data-*
+            const item = state.anggaranListData.find(i => i.id === alId);
+            if (!item) return;
+
+             showModal({
+                title: 'Konfirmasi Penghapusan Akun',
+                body: `<p>Apakah Anda yakin ingin menghapus data akun <strong class="font-semibold">${item.oldAccName} / ${item.newAccName}</strong>?</p>`,
+                buttons: [
+                    { label: 'Batal', classes: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg' },
+                    { 
+                        label: 'Hapus', 
+                        classes: 'bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg',
+                        onClick: async () => {
+                            state.anggaranListData = state.anggaranListData.filter(i => i.id !== alId);
+                            await saveData();
+                        }
+                    }
+                ]
+            });
+        }
+        
+        function showAlModal(item = null) { // Renamed modal function
+            const isEditing = item !== null;
+            const title = isEditing ? 'Edit Data Akun' : 'Tambah Data Akun Baru';
+            const body = `
+                <div class="space-y-4">
+                    <div>
+                        <label for="al-oldAccNum" class="block text-sm font-medium text-gray-700">No. Akun Lama</label>
+                        <input type="text" id="al-oldAccNum" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="${item?.oldAccNum || ''}">
+                    </div>
+                    <div>
+                        <label for="al-oldAccName" class="block text-sm font-medium text-gray-700">Nama Akun Lama</label>
+                        <input type="text" id="al-oldAccName" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="${item?.oldAccName || ''}">
+                    </div>
+                     <div>
+                        <label for="al-newAccNum" class="block text-sm font-medium text-gray-700">No. Akun Baru</label>
+                        <input type="text" id="al-newAccNum" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="${item?.newAccNum || ''}">
+                    </div>
+                    <div>
+                        <label for="al-newAccName" class="block text-sm font-medium text-gray-700">Nama Akun Baru</label>
+                        <input type="text" id="al-newAccName" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="${item?.newAccName || ''}">
+                    </div>
+                    <div>
+                        <label for="al-jenisAnggaran" class="block text-sm font-medium text-gray-700">Jenis Anggaran</label>
+                        <select id="al-jenisAnggaran" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                            <option value="" ${!item?.jenisAnggaran ? 'selected' : ''}>Pilih Jenis</option>
+                            <option value="BBM" ${item?.jenisAnggaran === 'BBM' ? 'selected' : ''}>BBM (Beban Barang Modal)</option> <!-- Updated Text -->
+                            <option value="BU" ${item?.jenisAnggaran === 'BU' ? 'selected' : ''}>BU (Beban Usaha)</option> <!-- Updated Text -->
+                        </select>
+                    </div>
+                </div>
+            `;
+            
+             showModal({
+                title: title,
+                body: body,
+                buttons: [
+                    { label: 'Batal', classes: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg' },
+                    {
+                        label: 'Simpan',
+                        classes: 'bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg',
+                        onClick: async (modalBody) => {
+                            const updatedItem = {
+                                id: isEditing ? item.id : `al-${Date.now()}`,
+                                oldAccNum: modalBody.querySelector('#al-oldAccNum').value.trim(),
+                                oldAccName: modalBody.querySelector('#al-oldAccName').value.trim(),
+                                newAccNum: modalBody.querySelector('#al-newAccNum').value.trim(),
+                                newAccName: modalBody.querySelector('#al-newAccName').value.trim(),
+                                jenisAnggaran: modalBody.querySelector('#al-jenisAnggaran').value // Get selected value
+                            };
+
+                            // Save if at least one field other than jenisAnggaran is filled OR jenisAnggaran is selected
+                            if (updatedItem.oldAccNum || updatedItem.oldAccName || updatedItem.newAccNum || updatedItem.newAccName || updatedItem.jenisAnggaran) { 
+                                if (isEditing) {
+                                    const index = state.anggaranListData.findIndex(i => i.id === item.id);
+                                    if (index > -1) {
+                                        state.anggaranListData[index] = updatedItem;
+                                    }
+                                } else {
+                                    state.anggaranListData.push(updatedItem);
+                                }
                                 await saveData();
                             }
                         }
                     }
                 ]
             });
-            setTimeout(() => document.getElementById('attachment-url').focus(), 100);
+            setTimeout(() => document.getElementById('al-oldAccNum').focus(), 100);
+        }
+        
+        // --- Upload Excel Handler for Anggaran List ---
+        function handleAlUpload(event) { // Renamed handler
+            const file = event.target.files[0];
+            if (!file) return;
+
+            loadingOverlay.style.display = 'flex'; // Show loader
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }); // Read as array of arrays
+
+                    if (jsonData.length < 1) {
+                         throw new Error("File Excel kosong atau tidak valid.");
+                    }
+
+                    // Find header row (case-insensitive), now including 'Jenis Anggaran'
+                    const headerRowIndex = jsonData.findIndex(row => 
+                        row.some(cell => String(cell).trim().toLowerCase() === 'no akun lama') &&
+                        row.some(cell => String(cell).trim().toLowerCase() === 'nama akun lama') &&
+                        row.some(cell => String(cell).trim().toLowerCase() === 'no akun baru') &&
+                        row.some(cell => String(cell).trim().toLowerCase() === 'nama akun baru') &&
+                        row.some(cell => String(cell).trim().toLowerCase() === 'jenis anggaran') 
+                    );
+
+                     if (headerRowIndex === -1) {
+                        throw new Error("Header kolom 'No Akun Lama', 'Nama Akun Lama', 'No Akun Baru', 'Nama Akun Baru', 'Jenis Anggaran' tidak ditemukan.");
+                    }
+                    
+                    const headers = jsonData[headerRowIndex].map(h => String(h).trim().toLowerCase());
+                    const oldAccNumIndex = headers.indexOf('no akun lama');
+                    const oldAccNameIndex = headers.indexOf('nama akun lama');
+                    const newAccNumIndex = headers.indexOf('no akun baru');
+                    const newAccNameIndex = headers.indexOf('nama akun baru');
+                    const jenisAnggaranIndex = headers.indexOf('jenis anggaran'); // Index for new column
+
+                    const importedData = [];
+                    let addedCount = 0;
+
+                    for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+                        const row = jsonData[i];
+                        const jenisAnggaranValue = String(row[jenisAnggaranIndex] || '').trim().toUpperCase(); // Normalize to uppercase BBM/BU
+                        const newItem = {
+                            id: `al-${Date.now()}-${i}`,
+                            oldAccNum: String(row[oldAccNumIndex] || '').trim(),
+                            oldAccName: String(row[oldAccNameIndex] || '').trim(),
+                            newAccNum: String(row[newAccNumIndex] || '').trim(),
+                            newAccName: String(row[newAccNameIndex] || '').trim(),
+                            jenisAnggaran: (jenisAnggaranValue === 'BBM' || jenisAnggaranValue === 'BU') ? jenisAnggaranValue : '' // Validate input
+                        };
+
+                        // Basic check: skip rows where all fields are empty
+                        if (!newItem.oldAccNum && !newItem.oldAccName && !newItem.newAccNum && !newItem.newAccName && !newItem.jenisAnggaran) {
+                            continue;
+                        }
+
+                        // Simple duplicate check based on all fields matching existing data
+                         const isDuplicate = state.anggaranListData.some(existing => 
+                            existing.oldAccNum === newItem.oldAccNum &&
+                            existing.oldAccName === newItem.oldAccName &&
+                            existing.newAccNum === newItem.newAccNum &&
+                            existing.newAccName === newItem.newAccName &&
+                            existing.jenisAnggaran === newItem.jenisAnggaran
+                        );
+
+                        if (!isDuplicate) {
+                             importedData.push(newItem);
+                             addedCount++;
+                        }
+                    }
+
+                    if (importedData.length > 0) {
+                        state.anggaranListData = [...state.anggaranListData, ...importedData];
+                        await saveData();
+                    }
+                    
+                    showSimpleModal('Import Berhasil', `${addedCount} data akun berhasil diimpor.`);
+
+                } catch (error) {
+                    console.error("Error processing Excel file:", error);
+                     showSimpleModal('Import Gagal', `Terjadi kesalahan saat memproses file: ${error.message}`);
+                } finally {
+                    loadingOverlay.style.display = 'none'; // Hide loader
+                    alUploadInput.value = ''; // Reset file input
+                }
+            };
+            reader.onerror = (error) => {
+                 console.error("Error reading file:", error);
+                 showSimpleModal('Error', 'Gagal membaca file.');
+                 loadingOverlay.style.display = 'none';
+                 alUploadInput.value = ''; 
+            };
+            reader.readAsArrayBuffer(file);
         }
 
         // --- MANAJEMEN DATA (Local & Firestore) ---
@@ -922,15 +1453,28 @@
             if (localDataString) {
                 try {
                     const localData = JSON.parse(localDataString);
-                    if (localData.version === DATA_VERSION) {
-                        return { sopData: localData.sopData || initialSopData, rkapData: localData.rkapData || initialRkapData };
+                    // Check version compatibility before loading
+                    if (localData.version === DATA_VERSION) { 
+                        return { 
+                            sopData: localData.sopData || initialSopData, 
+                            rkapData: localData.rkapData || initialRkapData,
+                            anggaranListData: localData.anggaranListData || initialAnggaranListData // Use renamed property
+                        };
+                    } else {
+                        console.warn(`Local storage version mismatch (Expected: ${DATA_VERSION}, Found: ${localData.version}). Loading initial data.`);
                     }
                 } catch (e) {
                      console.error("Gagal mem-parsing data lokal, memuat data baru.", e);
                 }
             }
-            return { sopData: initialSopData, rkapData: initialRkapData };
+            // Return initial data if local data is invalid, missing, or version mismatch
+             return { 
+                sopData: initialSopData, 
+                rkapData: initialRkapData,
+                anggaranListData: initialAnggaranListData // Use renamed property
+            };
         }
+
 
         async function saveDataToFirestore() {
             if (!db || !userId) return; 
@@ -952,14 +1496,20 @@
             }
         }
 
-        function updateStateAndRender(data) {
-            state.sopData = data.sopData || initialSopData;
-            state.rkapData = (data.rkapData || initialRkapData).map(rkap => ({
+       function updateStateAndRender(data) {
+            // Ensure data structures are arrays even if Firestore returns null/undefined
+            state.sopData = Array.isArray(data.sopData) ? data.sopData : initialSopData;
+            state.rkapData = (Array.isArray(data.rkapData) ? data.rkapData : initialRkapData).map(rkap => ({
                 ...rkap,
+                realisasiTanggal: rkap.realisasiTanggal || '', // Ensure realisasiTanggal exists
                 estimasiAnggaran: rkap.estimasiAnggaran || 0,
                 realisasiAnggaran: rkap.realisasiAnggaran || 0,
+                jenisAnggaran: rkap.jenisAnggaran || '', // Ensure jenisAnggaran exists
+                anggaranId: rkap.anggaranId || '' // Ensure anggaranId exists
             }));
-            
+            state.anggaranListData = Array.isArray(data.anggaranListData) ? data.anggaranListData : initialAnggaranListData; // Update renamed state property
+
+            // Populate dashboard year filter
             const rkapYears = [...new Set(state.rkapData.map(r => r.year))].sort((a, b) => b - a);
             dashboardYearFilter.innerHTML = '<option value="all">Semua Tahun</option>';
             rkapYears.forEach(year => {
@@ -968,18 +1518,24 @@
                 option.textContent = year;
                 dashboardYearFilter.appendChild(option);
             });
-            dashboardYearFilter.value = dashboardFilterYear;
+             // Set the filter value, handle 'all' case if no RKAP data exists yet
+            dashboardFilterYear = rkapYears.length > 0 ? (dashboardYearFilter.value || 'all') : 'all';
+             if (dashboardYearFilter && dashboardYearFilter.options.length > 0) { // Check if filter exists and has options
+                dashboardYearFilter.value = dashboardFilterYear;
+            }
             
             renderAll();
             loadingOverlay.style.display = 'none';
         }
+
 
         // --- FUNGSI NAVIGASI & SETUP ---
         function setupTabs() {
             const tabs = [
                 { button: tabDashboard, page: dashboardPage },
                 { button: tabSop, page: sopPage },
-                { button: tabRkap, page: rkapPage }
+                { button: tabRkap, page: rkapPage },
+                { button: tabAl, page: alPage } // Renamed tab and page
             ];
             
             tabs.forEach(tab => {
@@ -991,6 +1547,7 @@
                     });
                     tab.page.classList.remove('hidden');
                     tab.button.classList.add('active', 'text-gray-900');
+                    tab.button.classList.remove('text-gray-500'); // Ensure active tab text is not gray
                 });
             });
         }
@@ -1038,27 +1595,58 @@
         }
 
         function setupAddRkapButton() {
-            addRkapBtn.addEventListener('click', () => {
+             addRkapBtn.addEventListener('click', () => {
+                // Prepare options for anggaran dropdown
+                let anggaranOptionsHtml = '<option value="">Pilih Akun Anggaran</option>';
+                state.anggaranListData.forEach(item => {
+                    anggaranOptionsHtml += `<option value="${item.id}">${item.newAccNum} - ${item.newAccName} (${item.jenisAnggaran})</option>`;
+                });
+
                 showModal({
                     title: `Tambah RKAP Tahun ${currentRkapYear}`,
-                    body: `<input type="text" id="new-rkap-title" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Nama program kerja...">`,
+                    body: `
+                        <div class="space-y-4">
+                            <div>
+                                <label for="new-rkap-title" class="block text-sm font-medium text-gray-700">Nama Program Kerja</label>
+                                <input type="text" id="new-rkap-title" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Nama program kerja...">
+                            </div>
+                            <div>
+                                <label for="new-rkap-jenisAnggaran" class="block text-sm font-medium text-gray-700">Jenis Anggaran</label>
+                                <select id="new-rkap-jenisAnggaran" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                    <option value="" selected>Pilih Jenis</option>
+                                    <option value="BBM">BBM (Beban Barang Modal)</option>
+                                    <option value="BU">BU (Beban Usaha)</option>
+                                </select>
+                             </div>
+                             <div>
+                                <label for="new-rkap-anggaranId" class="block text-sm font-medium text-gray-700">Akun Anggaran</label>
+                                <select id="new-rkap-anggaranId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                    ${anggaranOptionsHtml}
+                                </select>
+                             </div>
+                        </div>
+                    `,
                     buttons: [
                         { label: 'Batal', classes: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg' },
                         {
                             label: 'Simpan',
                             classes: 'bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg',
-                            onClick: async () => {
-                                const titleInput = document.getElementById('new-rkap-title');
-                                const title = titleInput.value.trim();
+                            onClick: async (modalBody) => {
+                                const title = modalBody.querySelector('#new-rkap-title').value.trim();
+                                const jenisAnggaran = modalBody.querySelector('#new-rkap-jenisAnggaran').value;
+                                const anggaranId = modalBody.querySelector('#new-rkap-anggaranId').value; // Get selected anggaranId
                                 if (title) {
                                     const newRkapItem = {
                                         id: `rkap-${Date.now()}`,
                                         year: parseInt(currentRkapYear),
                                         title: title,
                                         targetDate: '',
+                                        realisasiTanggal: '', // Initialize new field
                                         relatedSop: [],
                                         estimasiAnggaran: 0,
-                                        realisasiAnggaran: 0
+                                        realisasiAnggaran: 0,
+                                        jenisAnggaran: jenisAnggaran, // Save selected jenis anggaran
+                                        anggaranId: anggaranId // Save selected anggaranId
                                     };
                                     state.rkapData.push(newRkapItem);
                                     await saveData();
@@ -1071,11 +1659,84 @@
             });
         }
 
+
+        function setupAddAlButton() { // Renamed setup function
+            addAlBtn.addEventListener('click', handleAddAlClick); // Renamed handler
+        }
+        
+        // --- Export Functions ---
+        function setupExportButtons() {
+            exportSopBtn.addEventListener('click', () => {
+                 const dataToExport = state.sopData.flatMap(sop => 
+                    sop.documents.map(doc => ({
+                        'SOP Title': sop.title,
+                        'Document Name': doc.name,
+                        'Status': doc.checked ? 'Checked' : 'Unchecked',
+                        'Attachment URL': doc.attachment || ''
+                    }))
+                 );
+                 exportToExcel(dataToExport, 'SOP_Checklist_Export', 'SOP Checklist');
+            });
+            
+            exportRkapBtn.addEventListener('click', () => {
+                 let filteredRkaps = state.rkapData.filter(r => r.year == currentRkapYear);
+                 // Also filter by BBM/BU if needed
+                 if (currentRkapFilter !== 'all') {
+                     filteredRkaps = filteredRkaps.filter(r => r.jenisAnggaran === currentRkapFilter);
+                 }
+                 const dataToExport = filteredRkaps.map(rkap => {
+                    const account = state.anggaranListData.find(acc => acc.id === rkap.anggaranId);
+                    return {
+                        'Tahun': rkap.year,
+                        'Program Kerja': rkap.title,
+                        'Jenis Anggaran': rkap.jenisAnggaran || '', 
+                        'Target Penyelesaian': rkap.targetDate || '',
+                        'Realisasi Penyelesaian': rkap.realisasiTanggal || '', // Export new field
+                        'SOP Terkait (IDs)': (rkap.relatedSop || []).join(', '),
+                        'No Akun Lama': account ? account.oldAccNum : '',
+                        'Nama Akun Lama': account ? account.oldAccName : '',
+                        'No Akun Baru': account ? account.newAccNum : '',
+                        'Nama Akun Baru': account ? account.newAccName : '',
+                        'Jenis Akun Anggaran': account ? account.jenisAnggaran : '',
+                        'Estimasi Anggaran': rkap.estimasiAnggaran || 0,
+                        'Realisasi Anggaran': rkap.realisasiAnggaran || 0
+                    };
+                 });
+                  exportToExcel(dataToExport, `RKAP_Export_${currentRkapYear}_${currentRkapFilter}`, `RKAP ${currentRkapYear} (${currentRkapFilter})`);
+            });
+            
+            exportAlBtn.addEventListener('click', () => { // Renamed export button handler
+                 const dataToExport = state.anggaranListData.map(item => ({ // Use renamed state
+                    'No Akun Lama': item.oldAccNum,
+                    'Nama Akun Lama': item.oldAccName,
+                    'No Akun Baru': item.newAccNum,
+                    'Nama Akun Baru': item.newAccName,
+                    'Jenis Anggaran': item.jenisAnggaran || '' // Include new field
+                 }));
+                 exportToExcel(dataToExport, 'Anggaran_List_Export', 'Anggaran List'); // Renamed filename/sheetname
+            });
+        }
+        
+         // --- Setup RKAP Filter Buttons ---
+        function setupRkapFilterButtons() {
+            rkapFilterBtns.forEach(button => {
+                button.addEventListener('click', (e) => {
+                    currentRkapFilter = e.currentTarget.dataset.filter;
+                    rkapFilterBtns.forEach(btn => btn.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                    renderRKAPs(); // Re-render RKAP list with the new filter
+                });
+            });
+        }
+
         // --- INISIALISASI APLIKASI ---
         document.addEventListener('DOMContentLoaded', () => {
             setupTabs();
             setupAddRkapButton();
             setupAddSopButton();
+            setupAddAlButton(); // Renamed setup function
+            setupExportButtons(); // Setup Export buttons
+            setupRkapFilterButtons(); // Setup RKAP filter buttons
             
             sopSearchInput.addEventListener('input', (e) => {
                 sopFilterId = null;
@@ -1087,6 +1748,13 @@
                 rkapSearchTerm = e.target.value;
                 renderRKAPs();
             });
+
+             alSearchInput.addEventListener('input', (e) => { // Renamed search input handler
+                alSearchTerm = e.target.value;
+                renderAnggaranList(); // Renamed render function
+            });
+            
+            alUploadInput.addEventListener('change', handleAlUpload); // Renamed upload handler
 
             clearSopFilterBtn.addEventListener('click', () => {
                 sopFilterId = null;
@@ -1109,11 +1777,12 @@
             rkapYearSelector.value = currentRkapYear;
             rkapYearSelector.addEventListener('change', (e) => {
                 currentRkapYear = e.target.value;
-                renderRKAPs();
+                renderRKAPs(); // When year changes, render based on current BBM/BU filter
             });
 
             document.addEventListener('click', (e) => {
-                if (!e.target.closest('.relative')) {
+                // Close multiselect dropdown if clicked outside
+                if (!e.target.closest('.relative[data-rkap-id]')) {
                     rkapListContainer.querySelectorAll('.sop-multiselect-options').forEach(options => {
                         options.classList.add('hidden');
                     });
@@ -1138,12 +1807,17 @@
                         if (unsubscribe) unsubscribe(); 
                         const docRef = doc(db, `artifacts/${appId}/users/${userId}/it_docs/data`);
                         unsubscribe = onSnapshot(docRef, (docSnap) => {
-                            if (docSnap.exists() && docSnap.data().rkapData) {
+                            if (docSnap.exists() && docSnap.data()) {
                                 updateStateAndRender(docSnap.data());
                             } else {
-                                const initialData = { sopData: initialSopData, rkapData: initialRkapData };
+                                // If document doesn't exist or data is empty, initialize with defaults
+                                const initialData = { 
+                                    sopData: initialSopData, 
+                                    rkapData: initialRkapData,
+                                    anggaranListData: initialAnggaranListData // Use renamed property
+                                };
                                 updateStateAndRender(initialData);
-                                saveData(); 
+                                saveData(); // Save the initial structure
                             }
                         }, (error) => {
                            console.error("Error onSnapshot:", error);
